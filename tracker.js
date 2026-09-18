@@ -67,7 +67,13 @@ function extraerYEnviarDatos() {
         total_caja: totalCaja
     };
 
-    // Enviar por HTTP POST al FastAPI local
+    if (!window.API_TOKEN) {
+        console.error('No hay token de autenticación para registrar el cierre.');
+        alert('La sesión expiró. Cierra sesión y vuelve a ingresar.');
+        return Promise.resolve(null);
+    }
+
+    // Enviar por HTTP POST al FastAPI configurado para el entorno actual.
     const controlador = new AbortController();
     const timeout = setTimeout(() => controlador.abort(), 10000);
 
@@ -93,7 +99,7 @@ function extraerYEnviarDatos() {
     })
     .catch(err => {
         console.error("Error enviando auditoría:", err);
-        alert("No se pudo enviar el cierre a la API. Verifica que FastAPI esté ejecutándose en el puerto 8000.");
+        alert("No se pudo enviar el cierre. Verifica tu sesión y la conexión con la API.");
         return null;
     })
     .finally(() => {
@@ -112,7 +118,13 @@ function bloquearPlanilla() {
 }
 
 function configurarTiempoReal() {
-    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.API_HOST || '127.0.0.1:8000'}/ws/live?token=${encodeURIComponent(window.API_TOKEN || '')}`;
+    if (!window.API_TOKEN) {
+        console.warn('WebSocket no iniciado: falta el token de autenticación.');
+        return;
+    }
+    const apiUrl = new URL(window.API_BASE_URL || 'http://127.0.0.1:8000/api/v1');
+    const wsScheme = apiUrl.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${wsScheme}://${apiUrl.host}/ws/live?token=${encodeURIComponent(window.API_TOKEN)}`;
     asegurarIdsCampos();
     conectarTiempoReal(wsUrl);
 }
