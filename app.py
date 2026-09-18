@@ -6,6 +6,7 @@ import json
 import os
 import altair as alt
 from pathlib import Path
+from urllib.parse import urlparse
 
 st.set_page_config(
     page_title="Auditoría Interna - Casino Systems",
@@ -23,19 +24,25 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-API_URL = "https://casino-audit-api.onrender.com/api/v1""
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api/v1")
 BASE_DIR = Path(__file__).resolve().parent
 
-def cargar_planilla(usuario_id=None, solo_lectura=False, watch_user_id=None):
+def cargar_planilla(usuario_id=None, usuario_nombre="Usuario", usuario_rol="empleado", solo_lectura=False, watch_user_id=None):
     index_path = BASE_DIR / "index.html"
     tracker_path = BASE_DIR / "tracker.js"
     if not index_path.exists() or not tracker_path.exists():
         return None
     html_content = index_path.read_text(encoding="utf-8")
     tracker_content = tracker_path.read_text(encoding="utf-8")
+    api = urlparse(API_URL)
+    api_host = api.netloc or "127.0.0.1:8000"
     configuracion = (
-        f"window.API_HOST = '127.0.0.1:8000'; "
+        f"window.API_BASE_URL = {json.dumps(API_URL)}; "
+        f"window.API_HOST = {json.dumps(api_host)}; "
+        f"window.API_TOKEN = {json.dumps(st.session_state.get('api_token'))}; "
         f"window.CASINO_USER_ID = {json.dumps(usuario_id)}; "
+        f"window.CASINO_USER_NAME = {json.dumps(usuario_nombre)}; "
+        f"window.CASINO_USER_ROLE = {json.dumps(usuario_rol)}; "
         f"window.PLANILLA_READONLY = {json.dumps(solo_lectura)};\n"
         f"window.WATCH_USER_ID = {json.dumps(watch_user_id)};\n"
     )
@@ -44,14 +51,55 @@ def cargar_planilla(usuario_id=None, solo_lectura=False, watch_user_id=None):
         f"<script>{configuracion}{tracker_content}</script>"
     )
 
+def presencia_admin(user):
+    api = urlparse(API_URL)
+    ws_scheme = "wss" if api.scheme == "https" else "ws"
+    ws_url = f"{ws_scheme}://{api.netloc}/ws/live"
+    presence_script = f"""
+    <script>
+    const ws = new WebSocket({json.dumps(ws_url + '?token=' + st.session_state.get('api_token', ''))});
+    ws.onopen = () => ws.send(JSON.stringify({{
+        type: 'presence', usuario_id: {json.dumps(user['id'])},
+        nombre: {json.dumps(user['nombre'])}, rol: 'admin'
+    }}));
+    </script>
+    """
+    components.html(presence_script, height=1)
+
+@st.fragment(run_every="5s")
+def mostrar_usuarios_conectados():
+    try:
+        respuesta = requests.get(f"{API_URL}/presencia", headers=api_headers(), timeout=5)
+        if respuesta.status_code == 200:
+            conectados = respuesta.json()
+            st.caption(f"🟢 Usuarios conectados ahora: {len(conectados)}")
+            if conectados:
+                st.dataframe(
+                    pd.DataFrame([
+                        {"Usuario": item.get("nombre", "Usuario"), "Rol": "Administrador" if item.get("rol") == "admin" else "Empleado"}
+                        for item in conectados
+                    ]),
+                    hide_index=True,
+                    use_container_width=True
+                )
+    except requests.RequestException:
+        st.caption("Estado de conexión no disponible.")
+
 if "user" not in st.session_state:
     st.session_state.user = None
+if "api_token" not in st.session_state:
+    st.session_state.api_token = None
+
+def api_headers():
+    return {"Authorization": f"Bearer {st.session_state.api_token}"} if st.session_state.api_token else {}
 
 def login(username, password):
     try:
         res = requests.post(f"{API_URL}/login", json={"username": username, "password": password})
         if res.status_code == 200:
-            st.session_state.user = res.json()["user"]
+            response = res.json()
+            st.session_state.user = response["user"]
+            st.session_state.api_token = response["token"]
             st.rerun()
         else:
             st.error("Credenciales incorrectas.")
@@ -60,6 +108,7 @@ def login(username, password):
 
 def logout():
     st.session_state.user = None
+    st.session_state.api_token = None
     st.rerun()
 
 # --- LOGIN ---
@@ -88,9 +137,11 @@ if user.get("requiere_cambio_pass"):
             confirm_pass = st.text_input("Confirmar Contraseña", type="password")
             if st.form_submit_button("Guardar Cambios"):
                 if nueva_pass == confirm_pass and nueva_pass:
-                    res = requests.post(f"{API_URL}/cambiar-credenciales", json={"user_id": user["id"], "nuevo_username": nuevo_user, "nueva_password": nueva_pass})
+                    res = requests.post(f"{API_URL}/cambiar-credenciales", headers=api_headers(), json={"user_id": user["id"], "nuevo_username": nuevo_user, "nueva_password": nueva_pass})
                     if res.status_code == 200:
-                        st.session_state.user = res.json()["user"]
+                        response = res.json()
+                        st.session_state.user = response["user"]
+                        st.session_state.api_token = response["token"]
                         st.rerun()
     st.stop()
 
@@ -112,7 +163,7 @@ if user["rol"] == "empleado":
     tab_p, tab_h = st.tabs(["📝 Llenar Planilla de Cierre", "📜 Mis Cierres Enviados"])
     
     with tab_p:
-        html_content = cargar_planilla(user["id"])
+        html_content = cargar_planilla(user["id"], user["nombre"], user["rol"])
         if html_content:
             components.html(html_content, height=850, scrolling=True)
         else:
@@ -123,7 +174,7 @@ if user["rol"] == "empleado":
         if st.button("🔄 Actualizar cierres", key="refresh_employee_closures"):
             st.rerun()
         try:
-            res = requests.get(f"{API_URL}/registros", timeout=10)
+            res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
             if res.status_code == 200:
                 user_id = str(user.get("id"))
                 username = str(user.get("username", "")).strip().lower()
@@ -191,11 +242,13 @@ elif user["rol"] == "admin":
         st.rerun()
 
     menu = st.session_state.admin_section
+    presencia_admin(user)
+    mostrar_usuarios_conectados()
     
     # 1. MONITOREO EN TIEMPO REAL POR EMPLEADO
     if menu == "live":
         st.subheader("Supervisión en Vivo de Planilla")
-        res_u = requests.get(f"{API_URL}/usuarios")
+        res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
             empleados = [u for u in res_u.json() if u["rol"] == "empleado"]
             if empleados:
@@ -206,7 +259,10 @@ elif user["rol"] == "admin":
                 
                 with col_visor:
                     st.markdown(f"### Visualizando Planilla en Vivo: **{selected_emp['nombre']}**")
-                    html_content = cargar_planilla(solo_lectura=True, watch_user_id=selected_emp["id"])
+                    html_content = cargar_planilla(
+                        user["id"], user["nombre"], user["rol"],
+                        solo_lectura=True, watch_user_id=selected_emp["id"]
+                    )
                     if html_content:
                         components.html(html_content, height=800, scrolling=True)
                     else:
@@ -218,7 +274,7 @@ elif user["rol"] == "admin":
     elif menu == "dashboard":
         st.subheader("Métricas y Auditoría General")
         try:
-            res = requests.get(f"{API_URL}/registros", timeout=10)
+            res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
             if res.status_code == 200:
                 registros = res.json()
                 df = pd.DataFrame(registros)
@@ -274,18 +330,21 @@ elif user["rol"] == "admin":
     elif menu == "crud":
         st.subheader("Administración de Personal")
         
-        with st.expander("➕ Crear Nuevo Empleado"):
+        with st.expander("➕ Crear Usuario"):
             with st.form("form_crear"):
                 u_user = st.text_input("Usuario")
                 u_nom = st.text_input("Nombre Completo")
                 u_pass = st.text_input("Contraseña Inicial", type="password")
-                if st.form_submit_button("Guardar Empleado"):
-                    res = requests.post(f"{API_URL}/usuarios", json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
+                u_rol = st.selectbox("Tipo de usuario", ["empleado", "admin"], format_func=lambda rol: "Administrador" if rol == "admin" else "Empleado")
+                if st.form_submit_button("Guardar Usuario"):
+                    res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": u_rol})
                     if res.status_code == 200:
-                        st.success("Empleado creado.")
+                        st.success("Usuario creado correctamente.")
                         st.rerun()
+                    else:
+                        st.error(res.json().get("detail", "No se pudo crear el usuario."))
 
-        res_u = requests.get(f"{API_URL}/usuarios")
+        res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
             lista_u = res_u.json()
             st.dataframe(pd.DataFrame(lista_u)[["id", "username", "nombre", "rol", "requiere_cambio_pass"]], use_container_width=True)
@@ -295,24 +354,33 @@ elif user["rol"] == "admin":
             
             # Modificar
             with col_mod:
-                st.write("### ✏️ Modificar Empleado")
-                u_sel = st.selectbox("Seleccionar id para editar:", [u["id"] for u in lista_u if u["rol"] == "empleado"])
+                st.write("### ✏️ Modificar Usuario")
+                usuarios_editables = [u for u in lista_u if u["id"] != user["id"]]
+                u_sel = st.selectbox("Seleccionar usuario para editar:", [u["id"] for u in usuarios_editables], format_func=lambda user_id: next(u["nombre"] for u in usuarios_editables if u["id"] == user_id)) if usuarios_editables else None
                 if u_sel:
                     curr_u = next(x for x in lista_u if x["id"] == u_sel)
                     mod_nom = st.text_input("Nombre", value=curr_u["nombre"])
                     mod_user = st.text_input("Usuario", value=curr_u["username"])
                     mod_pass = st.text_input("Nueva Clave (opcional)", type="password")
+                    mod_rol = st.selectbox("Tipo de usuario", ["empleado", "admin"], index=0 if curr_u["rol"] == "empleado" else 1)
                     if st.button("Actualizar Datos"):
-                        requests.put(f"{API_URL}/usuarios/{u_sel}", json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": "empleado"})
-                        st.success("Modificado correctamente.")
-                        st.rerun()
+                        res = requests.put(f"{API_URL}/usuarios/{u_sel}", headers=api_headers(), json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": mod_rol})
+                        if res.status_code == 200:
+                            st.success("Usuario modificado correctamente.")
+                            st.rerun()
+                        else:
+                            st.error(res.json().get("detail", "No se pudo modificar el usuario."))
             
             # Eliminar
             with col_eli:
-                st.write("### 🗑️ Eliminar Empleado")
-                u_del = st.selectbox("Seleccionar id para eliminar:", [u["id"] for u in lista_u if u["rol"] == "empleado"], key="del_sel")
+                st.write("### 🗑️ Eliminar Usuario")
+                usuarios_eliminables = [u for u in lista_u if u["id"] != user["id"]]
+                u_del = st.selectbox("Seleccionar usuario para eliminar:", [u["id"] for u in usuarios_eliminables], format_func=lambda user_id: next(u["nombre"] for u in usuarios_eliminables if u["id"] == user_id), key="del_sel") if usuarios_eliminables else None
                 if u_del:
                     if st.button("🔴 Confirmar Eliminar", type="primary"):
-                        requests.delete(f"{API_URL}/usuarios/{u_del}")
-                        st.warning("Empleado eliminado.")
-                        st.rerun()
+                        res = requests.delete(f"{API_URL}/usuarios/{u_del}", headers=api_headers())
+                        if res.status_code == 200:
+                            st.warning("Usuario eliminado.")
+                            st.rerun()
+                        else:
+                            st.error(res.json().get("detail", "No se pudo eliminar el usuario."))

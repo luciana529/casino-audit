@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import psycopg2
 import psycopg2.extras
 import os
 import json
+import base64
+import hashlib
+import hmac
+import time
 from typing import List, Dict, Any, Optional
 
 app = FastAPI(title="Casino Audit API")
@@ -18,6 +22,8 @@ app.add_middleware(
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-render")
+TOKEN_TTL_SECONDS = 8 * 60 * 60
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -76,10 +82,45 @@ def init_db():
 
 init_db()
 
+def create_token(user: Dict[str, Any]) -> str:
+    payload = {
+        "id": user["id"],
+        "username": user["username"],
+        "rol": user["rol"],
+        "exp": int(time.time()) + TOKEN_TTL_SECONDS,
+    }
+    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+    signature = hmac.new(AUTH_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{signature}"
+
+def verify_token(token: str) -> Dict[str, Any]:
+    try:
+        body, signature = token.split(".", 1)
+        expected = hmac.new(AUTH_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError
+        payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        if int(payload["exp"]) < int(time.time()):
+            raise ValueError
+        return payload
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError, base64.binascii.Error):
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
+
+def current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    return verify_token(authorization[7:].strip())
+
+def admin_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    if user.get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Se requieren permisos de administrador")
+    return user
+
 # --- GESTOR DE CONEXIONES WEBSOCKET EN TIEMPO REAL ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
+        self.connection_users: Dict[WebSocket, Dict[str, Any]] = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -88,9 +129,12 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        self.connection_users.pop(websocket, None)
 
     async def broadcast(self, message: str):
         for connection in self.active_connections:
+            if self.connection_users.get(connection, {}).get("rol") != "admin":
+                continue
             try:
                 await connection.send_text(message)
             except Exception:
@@ -100,13 +144,32 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        authenticated_user = verify_token(token)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket)
+    manager.connection_users[websocket] = {
+        "usuario_id": authenticated_user["id"],
+        "nombre": authenticated_user["username"],
+        "rol": authenticated_user["rol"]
+    }
     try:
         while True:
             data = await websocket.receive_text()
-            # Retransmitir cambios de la planilla a los administradores en vivo
-            await manager.broadcast(data)
-    except WebSocketDisconnect:
+            payload = json.loads(data)
+            if payload.get("type") == "presence":
+                continue
+            else:
+                # Retransmitir cambios de la planilla a los administradores en vivo.
+                payload["usuario_id"] = authenticated_user["id"]
+                await manager.broadcast(json.dumps(payload))
+    except (WebSocketDisconnect, json.JSONDecodeError):
         manager.disconnect(websocket)
 
 # Models
@@ -151,7 +214,7 @@ def login(data: LoginRequest):
             if u["username"] == data.username and u["password"] == data.password:
                 user_data = u.copy()
                 del user_data["password"]
-                return {"status": "ok", "user": user_data}
+                return {"status": "ok", "user": user_data, "token": create_token(user_data)}
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
     conn = get_db()
@@ -166,10 +229,13 @@ def login(data: LoginRequest):
 
     if not user:
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
-    return {"status": "ok", "user": dict(user)}
+    user_data = dict(user)
+    return {"status": "ok", "user": user_data, "token": create_token(user_data)}
 
 @app.post("/api/v1/cambiar-credenciales")
-def cambiar_credenciales(data: CambiarCredencialesRequest):
+def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] = Depends(current_user)):
+    if data.user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="No puedes cambiar las credenciales de otro usuario")
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
             if u["id"] == data.user_id:
@@ -178,7 +244,7 @@ def cambiar_credenciales(data: CambiarCredencialesRequest):
                 u["requiere_cambio_pass"] = False
                 user_data = u.copy()
                 del user_data["password"]
-                return {"status": "ok", "mensaje": "Credenciales actualizadas", "user": user_data}
+                return {"status": "ok", "mensaje": "Credenciales actualizadas", "user": user_data, "token": create_token(user_data)}
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     conn = get_db()
@@ -197,10 +263,11 @@ def cambiar_credenciales(data: CambiarCredencialesRequest):
         cursor.close()
         conn.close()
         
-    return {"status": "ok", "user": dict(updated_user)}
+    user_data = dict(updated_user)
+    return {"status": "ok", "user": user_data, "token": create_token(user_data)}
 
 @app.get("/api/v1/usuarios")
-def obtener_usuarios():
+def obtener_usuarios(_: Dict[str, Any] = Depends(admin_user)):
     if not DATABASE_URL:
         return [{"id": u["id"], "username": u["username"], "nombre": u["nombre"], "rol": u["rol"], "requiere_cambio_pass": u.get("requiere_cambio_pass", False)} for u in USUARIOS_LOCALES]
 
@@ -213,7 +280,9 @@ def obtener_usuarios():
     return users
 
 @app.post("/api/v1/usuarios")
-def crear_usuario(data: UserCreate):
+def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
+    if data.rol not in {"admin", "empleado"}:
+        raise HTTPException(status_code=400, detail="Rol inválido")
     if not DATABASE_URL:
         nuevo_id = len(USUARIOS_LOCALES) + 1
         nuevo_u = {"id": nuevo_id, "username": data.username, "password": data.password, "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
@@ -237,7 +306,9 @@ def crear_usuario(data: UserCreate):
     return {"status": "ok", "mensaje": "Usuario creado"}
 
 @app.put("/api/v1/usuarios/{user_id}")
-def actualizar_usuario(user_id: int, data: UserUpdate):
+def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depends(admin_user)):
+    if data.rol not in {"admin", "empleado"}:
+        raise HTTPException(status_code=400, detail="Rol inválido")
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
             if u["id"] == user_id:
@@ -263,7 +334,9 @@ def actualizar_usuario(user_id: int, data: UserUpdate):
     return {"status": "ok", "mensaje": "Usuario modificado"}
 
 @app.delete("/api/v1/usuarios/{user_id}")
-def eliminar_usuario(user_id: int):
+def eliminar_usuario(user_id: int, admin: Dict[str, Any] = Depends(admin_user)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta")
     if not DATABASE_URL:
         global USUARIOS_LOCALES
         USUARIOS_LOCALES = [u for u in USUARIOS_LOCALES if u["id"] != user_id]
@@ -279,7 +352,10 @@ def eliminar_usuario(user_id: int):
 
 # --- ENDPOINTS CIERRES ---
 @app.post("/api/v1/cierre")
-def registrar_cierre(data: CierreCaja):
+def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(current_user)):
+    if user["rol"] == "empleado":
+        data.usuario_id = user["id"]
+        data.operador = user["username"]
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -310,19 +386,38 @@ def registrar_cierre(data: CierreCaja):
     return {"status": "ok", "mensaje": "Cierre registrado"}
 
 @app.get("/api/v1/registros")
-def obtener_registros():
+def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
     if not DATABASE_URL:
-        return CIERRES_LOCALES
+        if user["rol"] == "admin":
+            return CIERRES_LOCALES
+        return [registro for registro in CIERRES_LOCALES if registro.get("usuario_id") == user["id"]]
         
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute("""
-        SELECT c.*, u.username, u.nombre as nombre_usuario 
-        FROM cierres c
-        LEFT JOIN usuarios u ON c.usuario_id = u.id
-        ORDER BY c.id DESC;
-    """)
+    if user["rol"] == "admin":
+        cursor.execute("""
+            SELECT c.*, u.username, u.nombre as nombre_usuario
+            FROM cierres c
+            LEFT JOIN usuarios u ON c.usuario_id = u.id
+            ORDER BY c.id DESC;
+        """)
+    else:
+        cursor.execute("""
+            SELECT c.*, u.username, u.nombre as nombre_usuario
+            FROM cierres c
+            LEFT JOIN usuarios u ON c.usuario_id = u.id
+            WHERE c.usuario_id = %s
+            ORDER BY c.id DESC;
+        """, (user["id"],))
     filas = cursor.fetchall()
     cursor.close()
     conn.close()
     return filas
+
+@app.get("/api/v1/presencia")
+def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
+    usuarios = {}
+    for usuario in manager.connection_users.values():
+        clave = usuario.get("usuario_id") or f"anonimo-{id(usuario)}"
+        usuarios[str(clave)] = usuario
+    return list(usuarios.values())

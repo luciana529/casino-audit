@@ -71,9 +71,12 @@ function extraerYEnviarDatos() {
     const controlador = new AbortController();
     const timeout = setTimeout(() => controlador.abort(), 10000);
 
-    return fetch("http://127.0.0.1:8000/api/v1/cierre", {
+    return fetch(`${window.API_BASE_URL || 'http://127.0.0.1:8000/api/v1'}/cierre`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${window.API_TOKEN || ''}`
+        },
         body: JSON.stringify(paqueteAuditoria),
         signal: controlador.signal
     })
@@ -109,7 +112,7 @@ function bloquearPlanilla() {
 }
 
 function configurarTiempoReal() {
-    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.API_HOST || '127.0.0.1:8000'}/ws/live`;
+    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.API_HOST || '127.0.0.1:8000'}/ws/live?token=${encodeURIComponent(window.API_TOKEN || '')}`;
     asegurarIdsCampos();
     conectarTiempoReal(wsUrl);
 }
@@ -130,6 +133,12 @@ function conectarTiempoReal(wsUrl) {
         };
         window.wsTiempoReal.onopen = () => {
             asegurarIdsCampos();
+            window.wsTiempoReal.send(JSON.stringify({
+                type: 'presence',
+                usuario_id: window.CASINO_USER_ID ?? null,
+                nombre: window.CASINO_USER_NAME || 'Usuario',
+                rol: window.CASINO_USER_ROLE || 'empleado'
+            }));
             Object.entries(window.cambiosPendientes || {}).forEach(([elementId, value]) => {
                 window.wsTiempoReal.send(JSON.stringify({
                     usuario_id: window.CASINO_USER_ID ?? null,
@@ -153,6 +162,12 @@ function conectarTiempoReal(wsUrl) {
         setTimeout(() => conectarTiempoReal(wsUrl), 1000);
     }
 }
+
+window.addEventListener('beforeunload', () => {
+    if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+        window.wsTiempoReal.close();
+    }
+});
 
 function asegurarIdsCampos() {
     document.querySelectorAll('input').forEach((input, index) => {
