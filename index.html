@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planilla de Cierre</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="tracker.js"></script>
+    <style>
+        body { background-color: #eef2f5; padding: 10px; font-family: Arial, sans-serif; }
+        
+        .sheet-container { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 6px; 
+            box-shadow: 0 0 15px rgba(0,0,0,0.15); 
+            max-width: 1350px; 
+            margin: auto; 
+            width: 100%;
+        }
+
+        table { border-collapse: collapse; width: 100%; font-size: 11px; white-space: nowrap; }
+        th, td { border: 1px solid #1a73e8 !important; padding: 4px !important; text-align: center; vertical-align: middle; }
+        
+        .excel-blue { background-color: #cfe2f3 !important; color: #000; font-weight: bold; }
+        .excel-dark-blue { background-color: #1a73e8 !important; color: #fff; font-weight: bold; }
+        
+        /* Inputs generales (izquierda) */
+        input.editable { width: 100%; border: none; background: transparent; text-align: center; font-size: 11px; outline: none; min-width: 25px; padding: 0px 2px; }
+        input.editable:focus { background: #e8f0fe; }
+        input.editable[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        /* Columnas de texto anchas para la tabla izquierda */
+        input.editable-texto-largo { 
+            width: 100%; 
+            border: none; 
+            background: transparent; 
+            text-align: center; 
+            font-size: 11px; 
+            outline: none; 
+            min-width: 120px; 
+            padding: 0px 2px;
+        }
+        input.editable-texto-largo:focus { background: #e8f0fe; }
+        input.editable-texto-largo[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        /* Estilos específicos para la derecha (sin max-width restrictivo y con padding mínimo) */
+        .tabla-derecha td {
+            padding: 2px 2px !important;
+        }
+        input.editable-der { 
+            width: 100%; 
+            border: none; 
+            background: transparent; 
+            text-align: center; 
+            font-size: 11px; 
+            outline: none; 
+            padding: 0px 1px;
+            margin: auto;
+        }
+        input.editable-der:focus { background: #e8f0fe; }
+        input.editable-der[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        /* Columna marcada (textos largos derecha) */
+        input.editable-der-ancho { 
+            width: 100%; 
+            border: none; 
+            background: transparent; 
+            text-align: center; 
+            font-size: 11px; 
+            outline: none; 
+            min-width: 140px; 
+            padding: 0px 2px;
+            margin: auto;
+        }
+        input.editable-der-ancho:focus { background: #e8f0fe; }
+        input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        @media (max-width: 991.98px) {
+            body { padding: 5px; }
+            .sheet-container { padding: 8px; }
+            table { font-size: 10px; }
+            input.editable { font-size: 10px; min-width: 20px; }
+            input.editable-texto-largo { font-size: 10px; min-width: 90px; }
+            input.editable-der { font-size: 10px; }
+            input.editable-der-ancho { font-size: 10px; min-width: 90px; }
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .sheet-container { box-shadow: none; padding: 0; max-width: 100%; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sheet-container" id="planillaToPrint">
+    
+    <div class="row">
+        <!-- TABLA PRINCIPAL IZQUIERDA -->
+        <div class="col-lg-8 pe-lg-1 mb-3">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr class="excel-blue">
+                            <th colspan="6">INGRESOS</th>
+                            <th colspan="3">EGRESO</th>
+                        </tr>
+                        <tr class="excel-dark-blue">
+                            <th style="width: 16%;">USUARIOS</th>
+                            <th style="width: 7%;">MONTO</th>
+                            <th style="width: 7%;">DESCUENTO</th>
+                            <th style="width: 7%;">DINAMICA</th>
+                            <th style="width: 16%;">FICHAS GRATIS</th>
+                            <th style="width: 7%;">FICHAS GRATIS</th>
+                            <th style="width: 17%;">USUARIO</th>
+                            <th style="width: 9%;">RETIRO%</th>
+                            <th style="width: 14%;">FR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filasPrincipales">
+                        <!-- Carga dinámica -->
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm mt-2 w-100 fw-bold no-print" onclick="agregarFila()">+ Agregar Fila</button>
+        </div>
+
+        <!-- BLOQUE DERECHA -->
+        <div class="col-lg-4 ps-lg-1">
+            
+            <!-- 1. Cabecera Fecha, Nombre, Hora -->
+            <table class="mb-2 tabla-derecha">
+                <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="excel-blue">NOMBRE</td><td><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="excel-blue">HORA</td><td><input type="time" id="hora" class="editable-der" placeholder="hora" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+            </table>
+
+            <!-- 2. INICIO -->
+            <table class="mb-2 tabla-derecha">
+                <tr class="excel-blue"><td colspan="5">INICIO</td></tr>
+                <tr class="excel-blue">
+                    <td style="width: 15%;">BV</td>
+                    <td style="width: 25%;">SALDO INICIAL</td>
+                    <td style="width: 20%;">RESPALDO</td>
+                    <td style="width: 15%;">ADELANTOS</td>
+                    <td style="width: 25%;"></td>
+                </tr>
+                <tr>
+                    <td class="text-start ps-2">BILLETERA</td>
+                    <td><input type="text" id="iniCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr>
+                    <td class="text-start ps-1" style="font-size: 10px; line-height: 1.1;">CELU<br>APUESTAS</td>
+                    <td><input type="text" id="iniBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr>
+                    <td class="text-start ps-2">FICHAS GANAMOS</td>
+                    <td><input type="text" id="iniGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr>
+                    <td class="text-start ps-2">GANA EN CASA</td>
+                    <td><input type="text" id="iniGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr>
+                    <td class="text-start ps-2">BET30</td>
+                    <td><input type="text" id="iniBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr class="excel-blue">
+                    <td class="text-start ps-2">TOTAL DE FICHAS</td>
+                    <td><input type="text" id="totalFichasInicio" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der-ancho" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+            </table>
+
+            <!-- 4. CIERRE -->
+            <table class="mb-2 tabla-derecha">
+                <tr class="excel-blue"><td colspan="2">CIERRE</td></tr>
+                <tr class="excel-blue"><td style="width: 40%;">BV</td><td style="width: 60%;">SALDO FINAL</td></tr>
+                <tr><td class="text-start ps-2">BILLETERA</td><td><input type="text" id="cierreBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr>
+                    <td class="text-start ps-1" style="font-size: 10px; line-height: 1.1;">CELU<br>APUESTAS</td>
+                    <td><input type="text" id="cierreCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                </tr>
+                <tr><td class="text-start ps-2">FICHAS GANAMOS</td><td><input type="text" id="cierreGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="text-start ps-2">GANA EN CASA</td><td><input type="text" id="cierreGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="text-start ps-2">BET30</td><td><input type="text" id="cierreBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr class="excel-blue"><td class="text-start ps-2">TOTAL DE FICHAS</td><td><input type="text" id="totalFichasCierre" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+            </table>
+
+            <!-- 5. RESUMEN FINAL / OPERACIONES -->
+            <table class="tabla-derecha">
+                <tr>
+                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 65%;">inicio fichas<br>-<br>cierre de fichas</td>
+                </tr>
+                <tr>
+                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 65%;">total<br>+<br>inicio caja</td>
+                </tr>
+                <tr>
+                    <td style="width: 45%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 65%;">total<br>-<br>fichas gratis</td>
+                </tr>
+                <tr class="excel-dark-blue">
+                    <td><input type="text" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td class="fw-bold">TOTAL</td>
+                </tr>
+                <tr>
+                    <td><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td>ADELANTOS</td>
+                </tr>
+                <tr class="excel-blue">
+                    <td><input type="text" class="editable-der fw-bold" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td class="fw-bold">total+FR</td>
+                </tr>
+                <tr class="excel-dark-blue">
+                    <td><input type="text" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td class="fw-bold">total de caja</td>
+                </tr>
+            </table>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- Botones de Guardar (Imagen y PDF) -->
+<div class="text-center mt-4 mb-5 no-print">
+    <button id="btnImagen" class="btn btn-success btn-lg px-4 shadow me-2 mb-2" onclick="guardarYGenerarImagen()">📷 Guardar como Imagen</button>
+    <button id="btnPdf" class="btn btn-primary btn-lg px-4 shadow mb-2" onclick="guardarYGenerarPDF()">📄 Guardar como PDF Directo</button>
+</div>
+
+<script>
+    window.onload = function() {
+        for(let i = 0; i < 15; i++) {
+            agregarFilaHTML();
+        }
+        cargarTemporal();
+    };
+
+    function agregarFilaHTML() {
+        const tbody = document.getElementById('filasPrincipales');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable-texto-largo" placeholder="Nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable fichas" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal();"></td>
+            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    function agregarFila() {
+        agregarFilaHTML();
+        guardarTemporal();
+    }
+
+    function bloquearCasilla(input) {
+        if (input.value.trim() !== "" && input.value !== "0") {
+            input.setAttribute('readonly', 'true');
+        }
+    }
+
+    function guardarTemporal() {
+        const inputs = document.querySelectorAll('.editable, .editable-texto-largo, .editable-der, .editable-der-ancho');
+        let valores = [];
+        inputs.forEach(input => {
+            valores.push(input.value);
+        });
+        localStorage.setItem('planilla_valores', JSON.stringify(valores));
+    }
+
+    function cargarTemporal() {
+        let guardados = localStorage.getItem('planilla_valores');
+        if (guardados) {
+            let valores = JSON.parse(guardados);
+            let inputsFijos = 29; 
+            let totalInputsTabla = valores.length - inputsFijos;
+            let totalFilasGuardadas = Math.floor(totalInputsTabla / 9);
+
+            if (totalFilasGuardadas > 15) {
+                let filasExtra = totalFilasGuardadas - 15;
+                for (let i = 0; i < filasExtra; i++) {
+                    agregarFilaHTML();
+                }
+            }
+
+            const inputs = document.querySelectorAll('.editable, .editable-texto-largo, .editable-der, .editable-der-ancho');
+            inputs.forEach((input, index) => {
+                if (valores[index] !== undefined) {
+                    input.value = valores[index];
+                    if (valores[index].trim() !== "" && valores[index] !== "0") {
+                        input.setAttribute('readonly', 'true');
+                    }
+                }
+            });
+        }
+    }
+
+    async function guardarYGenerarImagen() {
+        await extraerYEnviarDatos();
+        const element = document.getElementById('planillaToPrint');
+        const ahora = new Date();
+        const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
+        const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
+                        String(ahora.getMinutes()).padStart(2, '0') + '-' + 
+                        String(ahora.getSeconds()).padStart(2, '0');
+
+        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            localStorage.removeItem('planilla_valores');
+            location.reload();
+        });
+    }
+
+    async function guardarYGenerarPDF() {
+        await extraerYEnviarDatos();
+        const element = document.getElementById('planillaToPrint');
+        const ahora = new Date();
+        const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
+        const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
+                        String(ahora.getMinutes()).padStart(2, '0') + '-' + 
+                        String(ahora.getSeconds()).padStart(2, '0');
+
+        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            
+            const pdf = new jsPDF('l', 'mm', 'a4');
+            const imgWidth = 297; 
+            const pageHeight = 210; 
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            pdf.save(`Cierre_Turno_${fechaStr}_${horaStr}.pdf`);
+            
+            setTimeout(() => {
+                localStorage.removeItem('planilla_valores');
+                location.reload();
+            }, 1000);
+        });
+    }
+</script>
+
+</body>
+</html>
