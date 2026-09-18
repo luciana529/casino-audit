@@ -59,7 +59,7 @@ function extraerYEnviarDatos() {
     };
 
     // Enviar por HTTP POST a FastAPI
-    return fetch("http://127.0.0.1:8000/api/v1/cierre", {
+    return fetch("https://casino-audit-api.onrender.com/api/v1/cierre", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(paqueteAuditoria)

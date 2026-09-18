@@ -17,7 +17,7 @@ st_autorefresh(interval=3000, key="datarefresh")
 st.title("🎰 Panel de Control y Auditoría en Tiempo Real")
 st.caption("🔴 En Vivo — Monitoreo automático de planillas cargadas por los 21 operadores")
 
-API_URL = "http://127.0.0.1:8000/api/v1/registros"
+API_URL = "https://casino-audit-api.onrender.com/api/v1/registros"
 
 @st.cache_data(ttl=2)  # Caché ligero de 2 segundos para no saturar memoria
 def cargar_datos():
