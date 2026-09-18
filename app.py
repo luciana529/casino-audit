@@ -24,7 +24,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api/v1")
+DEFAULT_API_URL = (
+    "https://casino-audit-api.onrender.com/api/v1"
+    if os.getenv("RENDER")
+    else "http://127.0.0.1:8000/api/v1"
+)
+API_URL = os.getenv("API_URL", DEFAULT_API_URL).rstrip("/")
 BASE_DIR = Path(__file__).resolve().parent
 
 def cargar_planilla(usuario_id=None, usuario_nombre="Usuario", usuario_rol="empleado", solo_lectura=False, watch_user_id=None):

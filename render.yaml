@@ -10,6 +10,18 @@ services:
         fromDatabase:
           name: casino-db
           property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+
+  # Interfaz Streamlit
+  - type: web
+    name: casino-audit-dashboard
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
+    envVars:
+      - key: API_URL
+        value: https://casino-audit-api.onrender.com/api/v1
 
 # Base de datos PostgreSQL Gratuita
 databases:
