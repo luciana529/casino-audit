@@ -153,12 +153,14 @@ async def websocket_endpoint(websocket: WebSocket):
     except HTTPException:
         await websocket.close(code=1008)
         return
+        
     await manager.connect(websocket)
     manager.connection_users[websocket] = {
         "usuario_id": authenticated_user["id"],
         "nombre": authenticated_user["username"],
         "rol": authenticated_user["rol"]
     }
+    
     try:
         while True:
             data = await websocket.receive_text()
@@ -166,7 +168,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if payload.get("type") == "presence":
                 continue
             else:
-                # Retransmitir cambios de la planilla a los administradores en vivo.
                 payload["usuario_id"] = authenticated_user["id"]
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
@@ -209,9 +210,12 @@ class CierreCaja(BaseModel):
 # --- ENDPOINTS USUARIOS (CRUD) ---
 @app.post("/api/v1/login")
 def login(data: LoginRequest):
+    user_clean = data.username.strip()
+    pass_clean = data.password.strip()
+
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
-            if u["username"] == data.username and u["password"] == data.password:
+            if u["username"] == user_clean and u["password"] == pass_clean:
                 user_data = u.copy()
                 del user_data["password"]
                 return {"status": "ok", "user": user_data, "token": create_token(user_data)}
@@ -220,8 +224,8 @@ def login(data: LoginRequest):
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute(
-        "SELECT id, username, nombre, rol, requiere_cambio_pass FROM usuarios WHERE username = %s AND password = %s;",
-        (data.username, data.password)
+        "SELECT id, username, nombre, rol, requiere_cambio_pass FROM usuarios WHERE TRIM(username) = %s AND TRIM(password) = %s;",
+        (user_clean, pass_clean)
     )
     user = cursor.fetchone()
     cursor.close()
@@ -239,8 +243,8 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
             if u["id"] == data.user_id:
-                u["username"] = data.nuevo_username
-                u["password"] = data.nueva_password
+                u["username"] = data.nuevo_username.strip()
+                u["password"] = data.nueva_password.strip()
                 u["requiere_cambio_pass"] = False
                 user_data = u.copy()
                 del user_data["password"]
@@ -252,7 +256,7 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
     try:
         cursor.execute(
             "UPDATE usuarios SET username = %s, password = %s, requiere_cambio_pass = FALSE WHERE id = %s RETURNING id, username, nombre, rol, requiere_cambio_pass;",
-            (data.nuevo_username, data.nueva_password, data.user_id)
+            (data.nuevo_username.strip(), data.nueva_password.strip(), data.user_id)
         )
         updated_user = cursor.fetchone()
         conn.commit()
@@ -285,7 +289,7 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
         raise HTTPException(status_code=400, detail="Rol inválido")
     if not DATABASE_URL:
         nuevo_id = len(USUARIOS_LOCALES) + 1
-        nuevo_u = {"id": nuevo_id, "username": data.username, "password": data.password, "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
+        nuevo_u = {"id": nuevo_id, "username": data.username.strip(), "password": data.password.strip(), "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
         USUARIOS_LOCALES.append(nuevo_u)
         return {"status": "ok", "mensaje": "Usuario creado"}
 
@@ -294,7 +298,7 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
     try:
         cursor.execute(
             "INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass) VALUES (%s, %s, %s, %s, TRUE);",
-            (data.username, data.password, data.nombre, data.rol)
+            (data.username.strip(), data.password.strip(), data.nombre, data.rol)
         )
         conn.commit()
     except psycopg2.IntegrityError:
@@ -312,11 +316,11 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
             if u["id"] == user_id:
-                u["username"] = data.username
+                u["username"] = data.username.strip()
                 u["nombre"] = data.nombre
                 u["rol"] = data.rol
                 if data.password:
-                    u["password"] = data.password
+                    u["password"] = data.password.strip()
                 return {"status": "ok", "mensaje": "Usuario modificado"}
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -324,9 +328,9 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
     cursor = conn.cursor()
     try:
         if data.password:
-            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username, data.nombre, data.rol, data.password, user_id))
+            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, data.password.strip(), user_id))
         else:
-            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s WHERE id = %s;", (data.username, data.nombre, data.rol, user_id))
+            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, user_id))
         conn.commit()
     finally:
         cursor.close()
@@ -396,14 +400,14 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     if user["rol"] == "admin":
         cursor.execute("""
-            SELECT c.*, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             ORDER BY c.id DESC;
         """)
     else:
         cursor.execute("""
-            SELECT c.*, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             WHERE c.usuario_id = %s
@@ -412,7 +416,7 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
     filas = cursor.fetchall()
     cursor.close()
     conn.close()
-    return filas
+    return [dict(f) for f in filas]
 
 @app.get("/api/v1/presencia")
 def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
