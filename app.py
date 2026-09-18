@@ -67,6 +67,12 @@ def presencia_admin(user):
         type: 'presence', usuario_id: {json.dumps(user['id'])},
         nombre: {json.dumps(user['nombre'])}, rol: 'admin'
     }}));
+    setInterval(() => {{
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({{
+            type: 'presence', usuario_id: {json.dumps(user['id'])},
+            nombre: {json.dumps(user['nombre'])}, rol: 'admin'
+        }}));
+    }}, 20000);
     </script>
     """
     components.html(presence_script, height=1)
@@ -89,6 +95,98 @@ def mostrar_usuarios_conectados():
                 )
     except requests.RequestException:
         st.caption("Estado de conexión no disponible.")
+
+@st.fragment(run_every="5s")
+def mostrar_mis_cierres(user):
+    st.subheader("Mis Cierres Enviados")
+    if st.button("🔄 Actualizar cierres", key="refresh_employee_closures"):
+        st.rerun()
+    try:
+        res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
+        if res.status_code == 200:
+            user_id = str(user.get("id"))
+            username = str(user.get("username", "")).strip().lower()
+            datos = [
+                registro for registro in res.json()
+                if str(registro.get("usuario_id")) == user_id
+                or str(registro.get("operador", "")).strip().lower() == username
+            ]
+            if datos:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Fecha": registro.get("fecha", ""),
+                            "Hora": registro.get("hora", ""),
+                            "Total de caja": f"${float(registro.get('total_caja', 0)):,.2f}",
+                            "Estado": "Enviado con éxito"
+                        }
+                        for registro in datos
+                    ]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No hay cierres asociados a este usuario.")
+        else:
+            st.error(f"La API respondió con HTTP {res.status_code}.")
+    except requests.RequestException as error:
+        st.error(f"No se pudo cargar tus cierres: {error}")
+
+@st.fragment(run_every="5s")
+def mostrar_dashboard():
+    st.subheader("Métricas y Auditoría General")
+    try:
+        res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
+        if res.status_code == 200:
+            registros = res.json()
+            df = pd.DataFrame(registros)
+            total_cierres = len(df)
+            total_recaudado = pd.to_numeric(df["total_caja"], errors="coerce").fillna(0).sum() if not df.empty else 0
+
+            m1, m2 = st.columns(2)
+            m1.metric("Total Cierres", total_cierres)
+            m2.metric("Total Recaudado", f"${total_recaudado:,.2f}")
+
+            if registros:
+                st.markdown("---")
+                st.subheader("Recaudación por empleado")
+                datos_grafica = df.assign(
+                    empleado=df["nombre_usuario"].fillna(df["operador"]).replace("", "Sin nombre"),
+                    total_caja=pd.to_numeric(df["total_caja"], errors="coerce").fillna(0)
+                )
+                recaudacion = (
+                    datos_grafica.groupby("empleado", as_index=False)["total_caja"]
+                    .sum()
+                    .rename(columns={"total_caja": "Recaudación"})
+                    .sort_values("Recaudación", ascending=False)
+                )
+                grafica = (
+                    alt.Chart(recaudacion)
+                    .mark_bar(cornerRadiusEnd=4)
+                    .encode(
+                        y=alt.Y("empleado:N", sort="-x", title="Empleado"),
+                        x=alt.X("Recaudación:Q", title="Total de caja ($)"),
+                        color=alt.Color("empleado:N", legend=None),
+                        tooltip=[
+                            alt.Tooltip("empleado:N", title="Empleado"),
+                            alt.Tooltip("Recaudación:Q", title="Recaudación", format="$,.2f")
+                        ]
+                    )
+                    .properties(height=max(180, 48 * len(recaudacion)))
+                )
+                st.altair_chart(grafica, use_container_width=True)
+
+                st.subheader("Registro Global de Auditoría")
+                st.dataframe(
+                    df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja", "timestamp_servidor"]],
+                    use_container_width=True
+                )
+            else:
+                st.info("No hay cierres registrados todavía.")
+        else:
+            st.error(f"La API respondió con HTTP {res.status_code}.")
+    except requests.RequestException as error:
+        st.error(f"No se pudo conectar con la API: {error}")
 
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -175,39 +273,7 @@ if user["rol"] == "empleado":
             st.error("No se encontraron index.html y tracker.js junto a app.py.")
             
     with tab_h:
-        st.subheader("Mis Cierres Enviados")
-        if st.button("🔄 Actualizar cierres", key="refresh_employee_closures"):
-            st.rerun()
-        try:
-            res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
-            if res.status_code == 200:
-                user_id = str(user.get("id"))
-                username = str(user.get("username", "")).strip().lower()
-                datos = [
-                    registro for registro in res.json()
-                    if str(registro.get("usuario_id")) == user_id
-                    or str(registro.get("operador", "")).strip().lower() == username
-                ]
-                if datos:
-                    st.dataframe(
-                        pd.DataFrame([
-                            {
-                                "Fecha": registro.get("fecha", ""),
-                                "Hora": registro.get("hora", ""),
-                                "Total de caja": f"${float(registro.get('total_caja', 0)):,.2f}",
-                                "Estado": "Enviado con éxito"
-                            }
-                            for registro in datos
-                        ]),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                else:
-                    st.info("No hay cierres asociados a este usuario.")
-            else:
-                st.error(f"La API respondió con HTTP {res.status_code}.")
-        except requests.RequestException as error:
-            st.error(f"No se pudo cargar tus cierres: {error}")
+        mostrar_mis_cierres(user)
 
 # --- VISTA ADMINISTRADOR ---
 elif user["rol"] == "admin":
@@ -277,59 +343,7 @@ elif user["rol"] == "admin":
 
     # 2. MÉTRICAS CONSOLIDADAS
     elif menu == "dashboard":
-        st.subheader("Métricas y Auditoría General")
-        try:
-            res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
-            if res.status_code == 200:
-                registros = res.json()
-                df = pd.DataFrame(registros)
-                total_cierres = len(df)
-                total_recaudado = pd.to_numeric(df["total_caja"], errors="coerce").fillna(0).sum() if not df.empty else 0
-
-                m1, m2 = st.columns(2)
-                m1.metric("Total Cierres", total_cierres)
-                m2.metric("Total Recaudado", f"${total_recaudado:,.2f}")
-
-                if registros:
-                    st.markdown("---")
-                    st.subheader("Recaudación por empleado")
-                    datos_grafica = df.assign(
-                        empleado=df["nombre_usuario"].fillna(df["operador"]).replace("", "Sin nombre"),
-                        total_caja=pd.to_numeric(df["total_caja"], errors="coerce").fillna(0)
-                    )
-                    recaudacion = (
-                        datos_grafica.groupby("empleado", as_index=False)["total_caja"]
-                        .sum()
-                        .rename(columns={"total_caja": "Recaudación"})
-                        .sort_values("Recaudación", ascending=False)
-                    )
-                    grafica = (
-                        alt.Chart(recaudacion)
-                        .mark_bar(cornerRadiusEnd=4)
-                        .encode(
-                            y=alt.Y("empleado:N", sort="-x", title="Empleado"),
-                            x=alt.X("Recaudación:Q", title="Total de caja ($)"),
-                            color=alt.Color("empleado:N", legend=None),
-                            tooltip=[
-                                alt.Tooltip("empleado:N", title="Empleado"),
-                                alt.Tooltip("Recaudación:Q", title="Recaudación", format="$,.2f")
-                            ]
-                        )
-                        .properties(height=max(180, 48 * len(recaudacion)))
-                    )
-                    st.altair_chart(grafica, use_container_width=True)
-
-                    st.subheader("Registro Global de Auditoría")
-                    st.dataframe(
-                        df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja", "timestamp_servidor"]],
-                        use_container_width=True
-                    )
-                else:
-                    st.info("No hay cierres registrados todavía.")
-            else:
-                st.error(f"La API respondió con HTTP {res.status_code}.")
-        except requests.RequestException as error:
-            st.error(f"No se pudo conectar con la API: {error}")
+        mostrar_dashboard()
 
     # 3. GESTIÓN COMPLETA DE EMPLEADOS (CRUD)
     elif menu == "crud":

@@ -133,12 +133,19 @@ function conectarTiempoReal(wsUrl) {
         };
         window.wsTiempoReal.onopen = () => {
             asegurarIdsCampos();
-            window.wsTiempoReal.send(JSON.stringify({
+            const presencia = {
                 type: 'presence',
                 usuario_id: window.CASINO_USER_ID ?? null,
                 nombre: window.CASINO_USER_NAME || 'Usuario',
                 rol: window.CASINO_USER_ROLE || 'empleado'
-            }));
+            };
+            window.wsTiempoReal.send(JSON.stringify(presencia));
+            clearInterval(window.presenciaInterval);
+            window.presenciaInterval = setInterval(() => {
+                if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+                    window.wsTiempoReal.send(JSON.stringify(presencia));
+                }
+            }, 20000);
             Object.entries(window.cambiosPendientes || {}).forEach(([elementId, value]) => {
                 window.wsTiempoReal.send(JSON.stringify({
                     usuario_id: window.CASINO_USER_ID ?? null,
@@ -154,6 +161,7 @@ function conectarTiempoReal(wsUrl) {
             }
         };
         window.wsTiempoReal.onclose = () => {
+            clearInterval(window.presenciaInterval);
             window.wsTiempoReal = null;
             setTimeout(() => conectarTiempoReal(wsUrl), 1000);
         };
@@ -164,6 +172,7 @@ function conectarTiempoReal(wsUrl) {
 }
 
 window.addEventListener('beforeunload', () => {
+    clearInterval(window.presenciaInterval);
     if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
         window.wsTiempoReal.close();
     }
