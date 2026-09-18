@@ -26,9 +26,24 @@
         
         .excel-blue { background-color: #cfe2f3 !important; color: #000; font-weight: bold; }
         .excel-dark-blue { background-color: #1a73e8 !important; color: #fff; font-weight: bold; }
+
+        /* Contenedor para inputs con símbolo de peso */
+        .input-group-peso {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            background: transparent;
+        }
+        .input-group-peso span {
+            font-size: 11px;
+            color: #555;
+            padding-left: 2px;
+            font-weight: bold;
+            user-select: none;
+        }
         
         /* Inputs generales (izquierda) */
-        input.editable { width: 100%; border: none; background: transparent; text-align: center; font-size: 11px; outline: none; min-width: 25px; padding: 0px 2px; }
+        input.editable { width: 100%; border: none; background: transparent; text-align: center; font-size: 11px; outline: none; min-width: 20px; padding: 0px 2px; }
         input.editable:focus { background: #e8f0fe; }
         input.editable[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
 
@@ -46,7 +61,7 @@
         input.editable-texto-largo:focus { background: #e8f0fe; }
         input.editable-texto-largo[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
 
-        /* Estilos específicos para la derecha (sin max-width restrictivo y con padding mínimo) */
+        /* Estilos específicos para la derecha */
         .tabla-derecha td {
             padding: 2px 2px !important;
         }
@@ -86,6 +101,7 @@
             input.editable-texto-largo { font-size: 10px; min-width: 90px; }
             input.editable-der { font-size: 10px; }
             input.editable-der-ancho { font-size: 10px; min-width: 90px; }
+            .input-group-peso span { font-size: 10px; }
         }
 
         @media print {
@@ -132,11 +148,16 @@
         <!-- BLOQUE DERECHA -->
         <div class="col-lg-4 ps-lg-1">
             
-            <!-- 1. Cabecera Fecha, Nombre, Hora -->
+            <!-- 1. Cabecera Fecha, Nombre, Horarios -->
             <table class="mb-2 tabla-derecha">
-                <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr><td class="excel-blue">NOMBRE</td><td><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr><td class="excel-blue">HORA</td><td><input type="time" id="hora" class="editable-der" placeholder="hora" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td></tr>
+                <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td></tr>
+                <tr>
+                    <td class="excel-blue" style="width: 20%;">INICIO</td>
+                    <td style="width: 30%;"><input type="time" id="horaInicio" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td class="excel-blue" style="width: 20%;">CIERRE</td>
+                    <td style="width: 30%;"><input type="time" id="horaCierre" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                </tr>
             </table>
 
             <!-- 2. INICIO -->
@@ -151,45 +172,45 @@
                 </tr>
                 <tr>
                     <td class="text-start ps-2">BILLETERA</td>
-                    <td><input type="text" id="iniCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="iniCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
                 <tr>
                     <td class="text-start ps-1" style="font-size: 10px; line-height: 1.1;">CELU<br>APUESTAS</td>
-                    <td><input type="text" id="iniBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="iniBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
                 <tr>
                     <td class="text-start ps-2">FICHAS GANAMOS</td>
-                    <td><input type="text" id="iniGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="iniGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
                 <tr>
                     <td class="text-start ps-2">GANA EN CASA</td>
-                    <td><input type="text" id="iniGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="iniGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
                 <tr>
                     <td class="text-start ps-2">BET30</td>
-                    <td><input type="text" id="iniBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="iniBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der-ancho" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
                 <tr class="excel-blue">
                     <td class="text-start ps-2">TOTAL DE FICHAS</td>
-                    <td><input type="text" id="totalFichasInicio" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-                    <td><input type="text" class="editable-der-ancho" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="totalFichasInicio" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+                    <td><input type="text" class="editable-der-ancho" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                 </tr>
             </table>
 
@@ -197,45 +218,45 @@
             <table class="mb-2 tabla-derecha">
                 <tr class="excel-blue"><td colspan="2">CIERRE</td></tr>
                 <tr class="excel-blue"><td style="width: 40%;">BV</td><td style="width: 60%;">SALDO FINAL</td></tr>
-                <tr><td class="text-start ps-2">BILLETERA</td><td><input type="text" id="cierreBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="text-start ps-2">BILLETERA</td><td><div class="input-group-peso"><span>$</span><input type="text" id="cierreBilletera" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td></tr>
                 <tr>
                     <td class="text-start ps-1" style="font-size: 10px; line-height: 1.1;">CELU<br>APUESTAS</td>
-                    <td><input type="text" id="cierreCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="cierreCeluapuestas" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
                 </tr>
-                <tr><td class="text-start ps-2">FICHAS GANAMOS</td><td><input type="text" id="cierreGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr><td class="text-start ps-2">GANA EN CASA</td><td><input type="text" id="cierreGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr><td class="text-start ps-2">BET30</td><td><input type="text" id="cierreBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr class="excel-blue"><td class="text-start ps-2">TOTAL DE FICHAS</td><td><input type="text" id="totalFichasCierre" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="text-start ps-2">FICHAS GANAMOS</td><td><div class="input-group-peso"><span>$</span><input type="text" id="cierreGanamos" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td></tr>
+                <tr><td class="text-start ps-2">GANA EN CASA</td><td><div class="input-group-peso"><span>$</span><input type="text" id="cierreGanaEnCasa" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td></tr>
+                <tr><td class="text-start ps-2">BET30</td><td><div class="input-group-peso"><span>$</span><input type="text" id="cierreBet30" class="editable-der" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td></tr>
+                <tr class="excel-blue"><td class="text-start ps-2">TOTAL DE FICHAS</td><td><div class="input-group-peso"><span>$</span><input type="text" id="totalFichasCierre" class="editable-der fw-bold" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td></tr>
             </table>
 
             <!-- 5. RESUMEN FINAL / OPERACIONES -->
             <table class="tabla-derecha">
                 <tr>
-                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td style="width: 65%;">inicio fichas<br>-<br>cierre de fichas</td>
                 </tr>
                 <tr>
-                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 35%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td style="width: 65%;">total<br>+<br>inicio caja</td>
                 </tr>
                 <tr>
-                    <td style="width: 45%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 45%;"><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td style="width: 65%;">total<br>-<br>fichas gratis</td>
                 </tr>
                 <tr class="excel-dark-blue">
-                    <td><input type="text" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td class="fw-bold">TOTAL</td>
                 </tr>
                 <tr>
-                    <td><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td>ADELANTOS</td>
                 </tr>
                 <tr class="excel-blue">
-                    <td><input type="text" class="editable-der fw-bold" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><input type="text" class="editable-der fw-bold" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
                     <td class="fw-bold">total+FR</td>
                 </tr>
                 <tr class="excel-dark-blue">
-                    <td><input type="text" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td><div class="input-group-peso"><span>$</span><input type="text" id="totalCaja" class="editable-der fw-bold text-white" style="background: transparent;" placeholder="..." onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
                     <td class="fw-bold">total de caja</td>
                 </tr>
             </table>
@@ -252,6 +273,33 @@
 </div>
 
 <script>
+    // URL de producción para Render
+    const API_ENDPOINT = 'https://casino-audit-api.onrender.com/api/v1/cierre';
+    
+    // Conector WebSocket en Render (usa wss:// para HTTPS)
+    let ws;
+    try {
+        ws = new WebSocket('wss://casino-audit-api.onrender.com/ws/live');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.element_id && data.value !== undefined) {
+                const el = document.getElementById(data.element_id);
+                if (el) el.value = data.value;
+            }
+        };
+    } catch(e) {
+        console.log("WebSocket no disponible.");
+    }
+
+    function emitirTiempoReal(element) {
+        if (ws && ws.readyState === WebSocket.OPEN && element.id) {
+            ws.send(JSON.stringify({
+                element_id: element.id,
+                value: element.value
+            }));
+        }
+    }
+
     window.onload = function() {
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
@@ -263,15 +311,15 @@
         const tbody = document.getElementById('filasPrincipales');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable-texto-largo" placeholder="Nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable fichas" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal();"></td>
-            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
-            <td><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+            <td><input type="text" class="editable-texto-largo" placeholder="Nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable fichas" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+            <td><input type="text" class="editable-texto-largo" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
+            <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal(); emitirTiempoReal(this)"></div></td>
         `;
         tbody.appendChild(tr);
     }
@@ -300,7 +348,7 @@
         let guardados = localStorage.getItem('planilla_valores');
         if (guardados) {
             let valores = JSON.parse(guardados);
-            let inputsFijos = 29; 
+            let inputsFijos = 30; 
             let totalInputsTabla = valores.length - inputsFijos;
             let totalFilasGuardadas = Math.floor(totalInputsTabla / 9);
 
@@ -323,8 +371,41 @@
         }
     }
 
+    async function extraerYEnviarDatos() {
+        const ahora = new Date();
+        const fechaVal = document.getElementById('fecha')?.value || ahora.toISOString().slice(0, 10);
+        const horaVal = document.getElementById('horaCierre')?.value || String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+        const operadorVal = document.getElementById('nombre')?.value || "empleado1";
+        const totalCajaVal = parseFloat(document.getElementById('totalCaja')?.value || 0);
+
+        const dataPayload = {
+            operador: operadorVal,
+            fecha: fechaVal,
+            hora: horaVal,
+            saldos_inicio: {
+                total_fichas: parseFloat(document.getElementById('totalFichasInicio')?.value || 0)
+            },
+            ingresos: [],
+            egresos: [],
+            total_caja: totalCajaVal
+        };
+
+        try {
+            const res = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dataPayload)
+            });
+            return res.ok;
+        } catch (e) {
+            console.error("Error al registrar cierre:", e);
+            return false;
+        }
+    }
+
     async function guardarYGenerarImagen() {
         await extraerYEnviarDatos();
+
         const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
@@ -345,6 +426,7 @@
 
     async function guardarYGenerarPDF() {
         await extraerYEnviarDatos();
+
         const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);

@@ -1,66 +1,318 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 import pandas as pd
-from streamlit_autorefresh import st_autorefresh
+import json
+import os
+import altair as alt
+from pathlib import Path
 
-# Configuración de la página
 st.set_page_config(
-    page_title="Auditoría Casino - Panel de Control",
-    page_icon="🎰",
-    layout="wide"
+    page_title="Auditoría Interna - Casino Systems",
+    page_icon="🎲",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Auto-refresco automático cada 3000 ms (3 segundos)
-# Mantiene la pantalla actualizada en tiempo real sin requerir interacción
-st_autorefresh(interval=3000, key="datarefresh")
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; }
+    .stMetric { background-color: #1a1c23; padding: 15px; border-radius: 8px; border-left: 4px solid #00e676; }
+    .stButton>button { width: 100%; background-color: #2979ff; color: white; border-radius: 6px; font-weight: bold; }
+    .stButton>button:hover { background-color: #5393ff; }
+    </style>
+""", unsafe_allow_html=True)
 
-st.title("🎰 Panel de Control y Auditoría en Tiempo Real")
-st.caption("🔴 En Vivo — Monitoreo automático de planillas cargadas por los 21 operadores")
+API_URL = "https://casino-audit-api.onrender.com/api/v1""
+BASE_DIR = Path(__file__).resolve().parent
 
-API_URL = "https://casino-audit-api.onrender.com/api/v1/registros"
+def cargar_planilla(usuario_id=None, solo_lectura=False, watch_user_id=None):
+    index_path = BASE_DIR / "index.html"
+    tracker_path = BASE_DIR / "tracker.js"
+    if not index_path.exists() or not tracker_path.exists():
+        return None
+    html_content = index_path.read_text(encoding="utf-8")
+    tracker_content = tracker_path.read_text(encoding="utf-8")
+    configuracion = (
+        f"window.API_HOST = '127.0.0.1:8000'; "
+        f"window.CASINO_USER_ID = {json.dumps(usuario_id)}; "
+        f"window.PLANILLA_READONLY = {json.dumps(solo_lectura)};\n"
+        f"window.WATCH_USER_ID = {json.dumps(watch_user_id)};\n"
+    )
+    return html_content.replace(
+        '<script src="tracker.js"></script>',
+        f"<script>{configuracion}{tracker_content}</script>"
+    )
 
-@st.cache_data(ttl=2)  # Caché ligero de 2 segundos para no saturar memoria
-def cargar_datos():
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+def login(username, password):
     try:
-        response = requests.get(API_URL, timeout=2)
-        if response.status_code == 200:
-            return response.json()
-        return []
-    except Exception:
-        return []
+        res = requests.post(f"{API_URL}/login", json={"username": username, "password": password})
+        if res.status_code == 200:
+            st.session_state.user = res.json()["user"]
+            st.rerun()
+        else:
+            st.error("Credenciales incorrectas.")
+    except Exception as e:
+        st.error(f"Error conectando a la API: {e}")
 
-datos = cargar_datos()
+def logout():
+    st.session_state.user = None
+    st.rerun()
 
-if not datos:
-    st.info("⏳ Esperando cierres de planillas en vivo... El panel se actualiza automáticamente.")
-else:
-    # Métricas en tiempo real
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Planillas Reportadas", len(datos))
+# --- LOGIN ---
+if not st.session_state.user:
+    st.title("🎲 Sistema de Auditoría de Casino")
+    st.subheader("Acceso al Portal")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.form("login_form"):
+            user_input = st.text_input("Usuario")
+            pass_input = st.text_input("Contraseña", type="password")
+            if st.form_submit_button("Iniciar Sesión"):
+                login(user_input, pass_input)
+    st.stop()
+
+user = st.session_state.user
+
+# --- PRIMER INGRESO ---
+if user.get("requiere_cambio_pass"):
+    st.warning("⚠️ Primer Ingreso Detectado: Debes cambiar tu usuario y clave.")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.form("form_cambio_pass"):
+            nuevo_user = st.text_input("Nuevo Usuario", value=user["username"])
+            nueva_pass = st.text_input("Nueva Contraseña", type="password")
+            confirm_pass = st.text_input("Confirmar Contraseña", type="password")
+            if st.form_submit_button("Guardar Cambios"):
+                if nueva_pass == confirm_pass and nueva_pass:
+                    res = requests.post(f"{API_URL}/cambiar-credenciales", json={"user_id": user["id"], "nuevo_username": nuevo_user, "nueva_password": nueva_pass})
+                    if res.status_code == 200:
+                        st.session_state.user = res.json()["user"]
+                        st.rerun()
+    st.stop()
+
+# --- SIDEBAR GLOBAL ---
+st.sidebar.title(f"👤 {user['nombre']}")
+st.sidebar.caption(f"Rol: **{user['rol'].upper()}** | Usuario: `{user['username']}`")
+if st.sidebar.button("🚪 Cerrar Sesión"):
+    logout()
+st.sidebar.markdown("---")
+
+# --- VISTA EMPLEADO ---
+if user["rol"] == "empleado":
+    encabezado, accion = st.columns([5, 1])
+    with encabezado:
+        st.title(f"📄 Caja del Operador: {user['nombre']}")
+    with accion:
+        if st.button("🚪 Cerrar sesión", key="employee_logout_top", use_container_width=True):
+            logout()
+    tab_p, tab_h = st.tabs(["📝 Llenar Planilla de Cierre", "📜 Mis Cierres Enviados"])
     
-    ultimo_registro = datos[-1]
-    col2.metric("Última Carga", ultimo_registro.get("operador", "N/A"))
-    col3.metric("Último Total en Caja", f"${ultimo_registro.get('total_caja', 0):,.2f}")
+    with tab_p:
+        html_content = cargar_planilla(user["id"])
+        if html_content:
+            components.html(html_content, height=850, scrolling=True)
+        else:
+            st.error("No se encontraron index.html y tracker.js junto a app.py.")
+            
+    with tab_h:
+        st.subheader("Mis Cierres Enviados")
+        if st.button("🔄 Actualizar cierres", key="refresh_employee_closures"):
+            st.rerun()
+        try:
+            res = requests.get(f"{API_URL}/registros", timeout=10)
+            if res.status_code == 200:
+                user_id = str(user.get("id"))
+                username = str(user.get("username", "")).strip().lower()
+                datos = [
+                    registro for registro in res.json()
+                    if str(registro.get("usuario_id")) == user_id
+                    or str(registro.get("operador", "")).strip().lower() == username
+                ]
+                if datos:
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "Fecha": registro.get("fecha", ""),
+                                "Hora": registro.get("hora", ""),
+                                "Total de caja": f"${float(registro.get('total_caja', 0)):,.2f}",
+                                "Estado": "Enviado con éxito"
+                            }
+                            for registro in datos
+                        ]),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("No hay cierres asociados a este usuario.")
+            else:
+                st.error(f"La API respondió con HTTP {res.status_code}.")
+        except requests.RequestException as error:
+            st.error(f"No se pudo cargar tus cierres: {error}")
 
-    st.markdown("---")
-    st.subheader("📋 Historial Inmutable de Cierres (Actualización automática)")
+# --- VISTA ADMINISTRADOR ---
+elif user["rol"] == "admin":
+    encabezado, accion = st.columns([5, 1])
+    with encabezado:
+        st.title("🛡️ Dashboard de Auditoría y Supervisión")
+    with accion:
+        if st.button("🚪 Cerrar sesión", key="admin_logout_top", use_container_width=True):
+            logout()
 
-    # Tabla resumen
-    resumen = []
-    for reg in datos:
-        resumen.append({
-            "Fecha/Hora Servidor": reg.get("timestamp_servidor", "N/A"),
-            "Operador": reg.get("operador"),
-            "Fecha Planilla": reg.get("fecha"),
-            "Hora Planilla": reg.get("hora"),
-            "Total Caja": f"${reg.get('total_caja', 0):,.2f}"
-        })
+    acceso_dashboard, acceso_supervision, acceso_crud = st.columns(3)
+    with acceso_dashboard:
+        if st.button("📊 Dashboard", use_container_width=True, key="admin_dashboard_main"):
+            st.session_state.admin_section = "dashboard"
+            st.rerun()
+    with acceso_supervision:
+        if st.button("📡 Supervisión en Vivo", use_container_width=True, key="admin_live_main"):
+            st.session_state.admin_section = "live"
+            st.rerun()
+    with acceso_crud:
+        if st.button("⚙️ CRUD de Empleados", use_container_width=True, key="admin_crud_main"):
+            st.session_state.admin_section = "crud"
+            st.rerun()
+
+    if "admin_section" not in st.session_state:
+        st.session_state.admin_section = "dashboard"
+
+    st.sidebar.subheader("Navegación")
+    if st.sidebar.button("📊 Dashboard", use_container_width=True, key="admin_dashboard"):
+        st.session_state.admin_section = "dashboard"
+        st.rerun()
+    if st.sidebar.button("📡 Supervisión en Vivo", use_container_width=True, key="admin_live"):
+        st.session_state.admin_section = "live"
+        st.rerun()
+    if st.sidebar.button("⚙️ CRUD de Empleados", use_container_width=True, key="admin_crud"):
+        st.session_state.admin_section = "crud"
+        st.rerun()
+
+    menu = st.session_state.admin_section
     
-    df_resumen = pd.DataFrame(resumen)
-    st.dataframe(df_resumen, use_container_width=True)
+    # 1. MONITOREO EN TIEMPO REAL POR EMPLEADO
+    if menu == "live":
+        st.subheader("Supervisión en Vivo de Planilla")
+        res_u = requests.get(f"{API_URL}/usuarios")
+        if res_u.status_code == 200:
+            empleados = [u for u in res_u.json() if u["rol"] == "empleado"]
+            if empleados:
+                col_lista, col_visor = st.columns([1, 3])
+                with col_lista:
+                    st.write("### 👥 Empleados")
+                    selected_emp = st.radio("Selecciona un operador:", empleados, format_func=lambda empleado: empleado["nombre"])
+                
+                with col_visor:
+                    st.markdown(f"### Visualizando Planilla en Vivo: **{selected_emp['nombre']}**")
+                    html_content = cargar_planilla(solo_lectura=True, watch_user_id=selected_emp["id"])
+                    if html_content:
+                        components.html(html_content, height=800, scrolling=True)
+                    else:
+                        st.error("No se encontraron index.html y tracker.js junto a app.py.")
+            else:
+                st.info("No hay empleados registrados.")
 
-    # Inspección detallada
-    st.subheader("🔍 Inspección Detallada de Planillas")
-    for idx, reg in enumerate(reversed(datos)):
-        with st.expander(f"Cierre #{len(datos)-idx} - Operador: {reg.get('operador')} ({reg.get('fecha')} {reg.get('hora')})"):
-            st.json(reg)
+    # 2. MÉTRICAS CONSOLIDADAS
+    elif menu == "dashboard":
+        st.subheader("Métricas y Auditoría General")
+        try:
+            res = requests.get(f"{API_URL}/registros", timeout=10)
+            if res.status_code == 200:
+                registros = res.json()
+                df = pd.DataFrame(registros)
+                total_cierres = len(df)
+                total_recaudado = pd.to_numeric(df["total_caja"], errors="coerce").fillna(0).sum() if not df.empty else 0
+
+                m1, m2 = st.columns(2)
+                m1.metric("Total Cierres", total_cierres)
+                m2.metric("Total Recaudado", f"${total_recaudado:,.2f}")
+
+                if registros:
+                    st.markdown("---")
+                    st.subheader("Recaudación por empleado")
+                    datos_grafica = df.assign(
+                        empleado=df["nombre_usuario"].fillna(df["operador"]).replace("", "Sin nombre"),
+                        total_caja=pd.to_numeric(df["total_caja"], errors="coerce").fillna(0)
+                    )
+                    recaudacion = (
+                        datos_grafica.groupby("empleado", as_index=False)["total_caja"]
+                        .sum()
+                        .rename(columns={"total_caja": "Recaudación"})
+                        .sort_values("Recaudación", ascending=False)
+                    )
+                    grafica = (
+                        alt.Chart(recaudacion)
+                        .mark_bar(cornerRadiusEnd=4)
+                        .encode(
+                            y=alt.Y("empleado:N", sort="-x", title="Empleado"),
+                            x=alt.X("Recaudación:Q", title="Total de caja ($)"),
+                            color=alt.Color("empleado:N", legend=None),
+                            tooltip=[
+                                alt.Tooltip("empleado:N", title="Empleado"),
+                                alt.Tooltip("Recaudación:Q", title="Recaudación", format="$,.2f")
+                            ]
+                        )
+                        .properties(height=max(180, 48 * len(recaudacion)))
+                    )
+                    st.altair_chart(grafica, use_container_width=True)
+
+                    st.subheader("Registro Global de Auditoría")
+                    st.dataframe(
+                        df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja", "timestamp_servidor"]],
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No hay cierres registrados todavía.")
+            else:
+                st.error(f"La API respondió con HTTP {res.status_code}.")
+        except requests.RequestException as error:
+            st.error(f"No se pudo conectar con la API: {error}")
+
+    # 3. GESTIÓN COMPLETA DE EMPLEADOS (CRUD)
+    elif menu == "crud":
+        st.subheader("Administración de Personal")
+        
+        with st.expander("➕ Crear Nuevo Empleado"):
+            with st.form("form_crear"):
+                u_user = st.text_input("Usuario")
+                u_nom = st.text_input("Nombre Completo")
+                u_pass = st.text_input("Contraseña Inicial", type="password")
+                if st.form_submit_button("Guardar Empleado"):
+                    res = requests.post(f"{API_URL}/usuarios", json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
+                    if res.status_code == 200:
+                        st.success("Empleado creado.")
+                        st.rerun()
+
+        res_u = requests.get(f"{API_URL}/usuarios")
+        if res_u.status_code == 200:
+            lista_u = res_u.json()
+            st.dataframe(pd.DataFrame(lista_u)[["id", "username", "nombre", "rol", "requiere_cambio_pass"]], use_container_width=True)
+            
+            st.markdown("---")
+            col_mod, col_eli = st.columns(2)
+            
+            # Modificar
+            with col_mod:
+                st.write("### ✏️ Modificar Empleado")
+                u_sel = st.selectbox("Seleccionar id para editar:", [u["id"] for u in lista_u if u["rol"] == "empleado"])
+                if u_sel:
+                    curr_u = next(x for x in lista_u if x["id"] == u_sel)
+                    mod_nom = st.text_input("Nombre", value=curr_u["nombre"])
+                    mod_user = st.text_input("Usuario", value=curr_u["username"])
+                    mod_pass = st.text_input("Nueva Clave (opcional)", type="password")
+                    if st.button("Actualizar Datos"):
+                        requests.put(f"{API_URL}/usuarios/{u_sel}", json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": "empleado"})
+                        st.success("Modificado correctamente.")
+                        st.rerun()
+            
+            # Eliminar
+            with col_eli:
+                st.write("### 🗑️ Eliminar Empleado")
+                u_del = st.selectbox("Seleccionar id para eliminar:", [u["id"] for u in lista_u if u["rol"] == "empleado"], key="del_sel")
+                if u_del:
+                    if st.button("🔴 Confirmar Eliminar", type="primary"):
+                        requests.delete(f"{API_URL}/usuarios/{u_del}")
+                        st.warning("Empleado eliminado.")
+                        st.rerun()

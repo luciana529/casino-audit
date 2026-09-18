@@ -1,7 +1,9 @@
 function extraerYEnviarDatos() {
     const operador = document.getElementById('nombre')?.value || "Sin Nombre";
     const fecha = document.getElementById('fecha')?.value || new Date().toISOString().slice(0, 10);
-    const hora = document.getElementById('hora')?.value || new Date().toLocaleTimeString();
+    const horaInicio = document.getElementById('horaInicio')?.value || '';
+    const horaCierre = document.getElementById('horaCierre')?.value || new Date().toLocaleTimeString();
+    const hora = horaCierre;
 
     // Recopilar saldos iniciales
     const saldosInicio = {
@@ -46,28 +48,140 @@ function extraerYEnviarDatos() {
         }
     });
 
-    const totalCaja = parseFloat(document.getElementById('totalFichasCierre')?.value) || 0;
+    const totalCaja = parseFloat(
+        document.getElementById('totalCaja')?.value
+        || document.getElementById('totalFichasCierre')?.value
+        || '0'
+    ) || 0;
 
     const paqueteAuditoria = {
+        usuario_id: window.CASINO_USER_ID ?? null,
         operador: operador,
         fecha: fecha,
         hora: hora,
+        hora_inicio: horaInicio,
+        hora_cierre: horaCierre,
         saldos_inicio: saldosInicio,
         ingresos: ingresos,
         egresos: egresos,
         total_caja: totalCaja
     };
 
-    // Enviar por HTTP POST a FastAPI
-    return fetch("https://casino-audit-api.onrender.com/api/v1/cierre", {
+    // Enviar por HTTP POST al FastAPI local
+    const controlador = new AbortController();
+    const timeout = setTimeout(() => controlador.abort(), 10000);
+
+    return fetch("http://127.0.0.1:8000/api/v1/cierre", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paqueteAuditoria)
+        body: JSON.stringify(paqueteAuditoria),
+        signal: controlador.signal
     })
-    .then(res => res.json())
-    .then(data => console.log("Transacción enviada a la API de auditoría:", data))
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`La API respondió con HTTP ${res.status}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log("Transacción enviada a la API de auditoría:", data);
+        bloquearPlanilla();
+        return data;
+    })
     .catch(err => {
         console.error("Error enviando auditoría:", err);
-        alert("No se pudo enviar el cierre a la API. Verifica que FastAPI esté ejecutándose.");
+        alert("No se pudo enviar el cierre a la API. Verifica que FastAPI esté ejecutándose en el puerto 8000.");
+        return null;
+    })
+    .finally(() => {
+        clearTimeout(timeout);
     });
 }
+
+function bloquearPlanilla() {
+    document.querySelectorAll('input').forEach(input => {
+        input.setAttribute('readonly', 'true');
+        input.setAttribute('disabled', 'true');
+    });
+    document.querySelectorAll('button').forEach(button => {
+        button.setAttribute('disabled', 'true');
+    });
+}
+
+function configurarTiempoReal() {
+    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.API_HOST || '127.0.0.1:8000'}/ws/live`;
+    asegurarIdsCampos();
+    conectarTiempoReal(wsUrl);
+}
+
+function conectarTiempoReal(wsUrl) {
+    try {
+        window.wsTiempoReal = new WebSocket(wsUrl);
+        window.wsTiempoReal.onmessage = event => {
+            const data = JSON.parse(event.data);
+            if (
+                window.WATCH_USER_ID !== undefined &&
+                Number(data.usuario_id) !== Number(window.WATCH_USER_ID)
+            ) return;
+            const element = document.getElementById(data.element_id);
+            if (element && data.value !== undefined) {
+                element.value = data.value;
+            }
+        };
+        window.wsTiempoReal.onopen = () => {
+            asegurarIdsCampos();
+            Object.entries(window.cambiosPendientes || {}).forEach(([elementId, value]) => {
+                window.wsTiempoReal.send(JSON.stringify({
+                    usuario_id: window.CASINO_USER_ID ?? null,
+                    element_id: elementId,
+                    value: value
+                }));
+            });
+            window.cambiosPendientes = {};
+            if (window.PLANILLA_READONLY) {
+                document.querySelectorAll('input, button').forEach(element => {
+                    element.disabled = true;
+                });
+            }
+        };
+        window.wsTiempoReal.onclose = () => {
+            window.wsTiempoReal = null;
+            setTimeout(() => conectarTiempoReal(wsUrl), 1000);
+        };
+    } catch (error) {
+        console.log('WebSocket no disponible localmente.');
+        setTimeout(() => conectarTiempoReal(wsUrl), 1000);
+    }
+}
+
+function asegurarIdsCampos() {
+    document.querySelectorAll('input').forEach((input, index) => {
+        if (!input.id) input.id = `campo-${index}`;
+    });
+}
+
+document.addEventListener('input', event => {
+    const input = event.target;
+    if (input instanceof HTMLInputElement) {
+        asegurarIdsCampos();
+    }
+    if (
+        input instanceof HTMLInputElement &&
+        input.id &&
+        !window.PLANILLA_READONLY
+    ) {
+        const cambio = {
+            usuario_id: window.CASINO_USER_ID ?? null,
+            element_id: input.id,
+            value: input.value
+        };
+        if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+            window.wsTiempoReal.send(JSON.stringify(cambio));
+        } else {
+            window.cambiosPendientes = window.cambiosPendientes || {};
+            window.cambiosPendientes[input.id] = input.value;
+        }
+    }
+});
+
+window.addEventListener('load', configurarTiempoReal);
