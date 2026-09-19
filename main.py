@@ -65,17 +65,18 @@ def init_db():
             );
         """)
         
-        cursor.execute("""
-            INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
-            VALUES ('admin', 'admin123', 'Administrador General', 'admin', FALSE)
-            ON CONFLICT (username) DO NOTHING;
-        """)
-        
-        cursor.execute("""
-            INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
-            VALUES ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE)
-            ON CONFLICT (username) DO NOTHING;
-        """)
+        cursor.execute("SELECT COUNT(*) FROM usuarios;")
+        cantidad_usuarios = cursor.fetchone()[0]
+
+        # Solo crear las cuentas iniciales cuando la tabla todavía está vacía.
+        # Los cambios posteriores de username, password o rol quedan preservados.
+        if cantidad_usuarios == 0:
+            cursor.execute("""
+                INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
+                VALUES
+                    ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
+                    ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
+            """)
         
         conn.commit()
         cursor.close()
