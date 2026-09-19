@@ -22,6 +22,8 @@
         }
 
         .table-responsive { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+        .bloque-derecha { max-width: 100%; min-width: 0; overflow-x: auto; }
+        .bloque-derecha .tabla-derecha { min-width: max-content; }
         table { border-collapse: collapse; width: 100%; min-width: max-content; table-layout: auto; font-size: 11px; white-space: nowrap; }
         th, td { border: 1px solid #1a73e8 !important; padding: 4px !important; text-align: center; vertical-align: middle; }
         
@@ -154,7 +156,7 @@
         </div>
 
         <!-- BLOQUE DERECHA -->
-        <div class="col-lg-4 ps-lg-1">
+        <div class="col-lg-4 ps-lg-1 bloque-derecha">
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
             <table class="mb-2 tabla-derecha">
@@ -285,7 +287,11 @@
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
         }
-        cargarTemporal();
+        if (window.PLANILLA_READONLY) {
+            localStorage.removeItem('planilla_valores');
+        } else {
+            cargarTemporal();
+        }
     };
 
     function agregarFilaHTML() {

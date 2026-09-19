@@ -256,11 +256,15 @@ elif user["rol"] == "admin":
             if empleados:
                 col_lista, col_visor = st.columns([1, 3])
                 with col_lista:
-                    st.write("### 👥 Empleados")
-                    selected_emp = st.radio("Selecciona un operador:", empleados, format_func=lambda empleado: empleado["nombre"])
+                    st.write("### Empleados")
+                    selected_emp = st.radio(
+                        "Selecciona un empleado:",
+                        empleados,
+                        format_func=lambda empleado: empleado["username"]
+                    )
                 
                 with col_visor:
-                    st.markdown(f"### Visualizando Planilla en Vivo: **{selected_emp['nombre']}**")
+                    st.markdown(f"### Planilla en vivo: **{selected_emp['nombre']}**")
                     html_content = cargar_planilla(
                         user["id"], user["nombre"], user["rol"],
                         solo_lectura=True, watch_user_id=selected_emp["id"]
