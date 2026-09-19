@@ -159,6 +159,7 @@ function conectarTiempoReal(wsUrl) {
                 ) return;
                 aplicarEstadoPlanilla(data.state);
                 guardarTemporal();
+                setTimeout(() => location.reload(), 300);
                 return;
             }
             if (
