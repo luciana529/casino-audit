@@ -24,7 +24,36 @@
         .table-responsive { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
         .col-lg-8, .col-lg-4 { min-width: 0; }
         .bloque-derecha { max-width: 100%; min-width: 0; overflow-x: auto; }
-        .bloque-derecha .tabla-derecha { min-width: max-content; }
+        .bloque-derecha .tabla-derecha {
+            width: 100%;
+            min-width: 0;
+        }
+        .tabla-inicio {
+            display: table;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            table-layout: fixed;
+            overflow: hidden;
+        }
+        .tabla-inicio td,
+        .tabla-inicio th {
+            min-width: 0 !important;
+            max-width: 0;
+            overflow: hidden;
+        }
+        .tabla-inicio input.editable-der,
+        .tabla-inicio input.editable-der-ancho {
+            min-width: 0;
+            max-width: 100%;
+            width: 100%;
+        }
+        .tabla-inicio .input-group-peso {
+            min-width: 0;
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
         table { border-collapse: collapse; width: 100%; min-width: max-content; table-layout: auto; font-size: 11px; white-space: nowrap; }
         th, td { border: 1px solid #1a73e8 !important; padding: 4px !important; text-align: center; vertical-align: middle; }
         
@@ -160,7 +189,7 @@
         <div class="col-lg-4 ps-lg-1 bloque-derecha">
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
-            <table class="mb-2 tabla-derecha">
+            <table class="mb-2 tabla-derecha tabla-inicio">
                 <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
