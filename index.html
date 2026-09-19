@@ -21,7 +21,9 @@
             width: 100%;
         }
 
-        .table-responsive { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+        .table-responsive { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+        .tabla-ingresos { width: max-content; min-width: 100%; }
+        .col-lg-8, .col-lg-4 { min-width: 0; }
         .bloque-derecha { max-width: 100%; min-width: 0; overflow-x: auto; }
         .bloque-derecha .tabla-derecha { min-width: max-content; }
         table { border-collapse: collapse; width: 100%; min-width: max-content; table-layout: auto; font-size: 11px; white-space: nowrap; }
@@ -129,7 +131,7 @@
         <!-- TABLA PRINCIPAL IZQUIERDA -->
         <div class="col-lg-8 pe-lg-1 mb-3">
             <div class="table-responsive">
-                <table>
+                <table class="tabla-ingresos">
                     <thead>
                         <tr class="excel-blue">
                             <th colspan="6">INGRESOS</th>
@@ -289,6 +291,9 @@
         }
         if (window.PLANILLA_READONLY) {
             localStorage.removeItem('planilla_valores');
+            document.querySelectorAll('input, select, textarea').forEach(input => {
+                input.value = '';
+            });
         } else {
             cargarTemporal();
         }

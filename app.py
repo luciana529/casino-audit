@@ -256,7 +256,7 @@ elif user["rol"] == "admin":
             if empleados:
                 col_lista, col_visor = st.columns([1, 3])
                 with col_lista:
-                    st.write("### Empleados")
+                    st.subheader("Empleados")
                     selected_emp = st.radio(
                         "Selecciona un empleado:",
                         empleados,
