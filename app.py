@@ -280,14 +280,13 @@ elif user["rol"] == "admin":
     elif menu == "crud":
         st.subheader("Administración de Personal")
         
-        with st.expander("➕ Crear Usuario"):
+        with st.expander("➕ Crear Empleado"):
             with st.form("form_crear"):
                 u_user = st.text_input("Usuario")
                 u_nom = st.text_input("Nombre Completo")
                 u_pass = st.text_input("Contraseña Inicial", type="password")
-                u_rol = st.selectbox("Tipo de usuario", ["empleado", "admin"], format_func=lambda rol: "Administrador" if rol == "admin" else "Empleado")
-                if st.form_submit_button("Guardar Usuario"):
-                    res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": u_rol})
+                if st.form_submit_button("Guardar Empleado"):
+                    res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
                     if res.status_code == 200:
                         st.success("Usuario creado correctamente.")
                         st.rerun()
@@ -305,16 +304,15 @@ elif user["rol"] == "admin":
             # Modificar
             with col_mod:
                 st.write("### ✏️ Modificar Usuario")
-                usuarios_editables = [u for u in lista_u if u["id"] != user["id"]]
+                usuarios_editables = [u for u in lista_u if u["rol"] == "empleado"]
                 u_sel = st.selectbox("Seleccionar usuario para editar:", [u["id"] for u in usuarios_editables], format_func=lambda user_id: next(u["nombre"] for u in usuarios_editables if u["id"] == user_id)) if usuarios_editables else None
                 if u_sel:
                     curr_u = next(x for x in lista_u if x["id"] == u_sel)
                     mod_nom = st.text_input("Nombre", value=curr_u["nombre"])
                     mod_user = st.text_input("Usuario", value=curr_u["username"])
                     mod_pass = st.text_input("Nueva Clave (opcional)", type="password")
-                    mod_rol = st.selectbox("Tipo de usuario", ["empleado", "admin"], index=0 if curr_u["rol"] == "empleado" else 1)
                     if st.button("Actualizar Datos"):
-                        res = requests.put(f"{API_URL}/usuarios/{u_sel}", headers=api_headers(), json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": mod_rol})
+                        res = requests.put(f"{API_URL}/usuarios/{u_sel}", headers=api_headers(), json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": "empleado"})
                         if res.status_code == 200:
                             st.success("Usuario modificado correctamente.")
                             st.rerun()
@@ -324,7 +322,7 @@ elif user["rol"] == "admin":
             # Eliminar
             with col_eli:
                 st.write("### 🗑️ Eliminar Usuario")
-                usuarios_eliminables = [u for u in lista_u if u["id"] != user["id"]]
+                usuarios_eliminables = [u for u in lista_u if u["rol"] == "empleado"]
                 u_del = st.selectbox("Seleccionar usuario para eliminar:", [u["id"] for u in usuarios_eliminables], format_func=lambda user_id: next(u["nombre"] for u in usuarios_eliminables if u["id"] == user_id), key="del_sel") if usuarios_eliminables else None
                 if u_del:
                     if st.button("🔴 Confirmar Eliminar", type="primary"):

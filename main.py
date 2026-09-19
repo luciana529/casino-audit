@@ -289,8 +289,8 @@ def obtener_usuarios(_: Dict[str, Any] = Depends(admin_user)):
 
 @app.post("/api/v1/usuarios")
 def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
-    if data.rol not in {"admin", "empleado"}:
-        raise HTTPException(status_code=400, detail="Rol inválido")
+    if data.rol != "empleado":
+        raise HTTPException(status_code=403, detail="Los administradores se cargan manualmente")
     if not DATABASE_URL:
         nuevo_id = len(USUARIOS_LOCALES) + 1
         nuevo_u = {"id": nuevo_id, "username": data.username.strip(), "password": data.password.strip(), "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
@@ -315,11 +315,13 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
 
 @app.put("/api/v1/usuarios/{user_id}")
 def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depends(admin_user)):
-    if data.rol not in {"admin", "empleado"}:
-        raise HTTPException(status_code=400, detail="Rol inválido")
+    if data.rol != "empleado":
+        raise HTTPException(status_code=403, detail="Los administradores son fijos")
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
             if u["id"] == user_id:
+                if u["rol"] != "empleado":
+                    raise HTTPException(status_code=403, detail="Los administradores son fijos")
                 u["username"] = data.username.strip()
                 u["nombre"] = data.nombre
                 u["rol"] = data.rol
@@ -331,6 +333,12 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
     conn = get_db()
     cursor = conn.cursor()
     try:
+        cursor.execute("SELECT rol FROM usuarios WHERE id = %s;", (user_id,))
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if target[0] != "empleado":
+            raise HTTPException(status_code=403, detail="Los administradores son fijos")
         if data.password:
             cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, data.password.strip(), user_id))
         else:
@@ -347,11 +355,24 @@ def eliminar_usuario(user_id: int, admin: Dict[str, Any] = Depends(admin_user)):
         raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta")
     if not DATABASE_URL:
         global USUARIOS_LOCALES
+        target = next((u for u in USUARIOS_LOCALES if u["id"] == user_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if target["rol"] != "empleado":
+            raise HTTPException(status_code=403, detail="Los administradores son fijos")
         USUARIOS_LOCALES = [u for u in USUARIOS_LOCALES if u["id"] != user_id]
         return {"status": "ok", "mensaje": "Usuario eliminado"}
 
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute("SELECT rol FROM usuarios WHERE id = %s;", (user_id,))
+    target = cursor.fetchone()
+    if not target:
+        cursor.close()
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if target[0] != "empleado":
+        cursor.close()
+        raise HTTPException(status_code=403, detail="Los administradores son fijos")
     cursor.execute("DELETE FROM usuarios WHERE id = %s;", (user_id,))
     conn.commit()
     cursor.close()
