@@ -206,6 +206,7 @@ class CierreCaja(BaseModel):
     ingresos: List[Dict[str, Any]]
     egresos: List[Dict[str, Any]]
     total_caja: float
+    estado_planilla: Dict[str, str] = {}
 
 # --- ENDPOINTS USUARIOS (CRUD) ---
 @app.post("/api/v1/login")
@@ -356,7 +357,7 @@ def eliminar_usuario(user_id: int, admin: Dict[str, Any] = Depends(admin_user)):
 
 # --- ENDPOINTS CIERRES ---
 @app.post("/api/v1/cierre")
-def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(current_user)):
+async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(current_user)):
     if user["rol"] == "empleado":
         data.usuario_id = user["id"]
         data.operador = user["username"]
@@ -376,6 +377,11 @@ def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(current_us
             "timestamp_servidor": "2026-03-27 10:00:00"
         }
         CIERRES_LOCALES.append(registro)
+        await manager.broadcast(json.dumps({
+            "type": "closure_saved",
+            "usuario_id": user["id"],
+            "state": data.estado_planilla
+        }))
         return {"status": "ok", "mensaje": "Cierre registrado"}
         
     conn = get_db()
@@ -387,6 +393,11 @@ def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(current_us
     conn.commit()
     cursor.close()
     conn.close()
+    await manager.broadcast(json.dumps({
+        "type": "closure_saved",
+        "usuario_id": user["id"],
+        "state": data.estado_planilla
+    }))
     return {"status": "ok", "mensaje": "Cierre registrado"}
 
 @app.get("/api/v1/registros")

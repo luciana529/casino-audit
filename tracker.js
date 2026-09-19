@@ -64,7 +64,8 @@ function extraerYEnviarDatos() {
         saldos_inicio: saldosInicio,
         ingresos: ingresos,
         egresos: egresos,
-        total_caja: totalCaja
+        total_caja: totalCaja,
+        estado_planilla: obtenerEstadoPlanilla()
     };
 
     if (!window.API_TOKEN) {
@@ -94,14 +95,6 @@ function extraerYEnviarDatos() {
     })
     .then(data => {
         console.log("Transacción enviada a la API de auditoría:", data);
-        if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
-            asegurarIdsCampos();
-            window.wsTiempoReal.send(JSON.stringify({
-                type: 'closure_saved',
-                usuario_id: window.CASINO_USER_ID ?? null,
-                state: obtenerEstadoPlanilla()
-            }));
-        }
         bloquearPlanilla();
         return data;
     })
