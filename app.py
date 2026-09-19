@@ -113,33 +113,6 @@ def mostrar_dashboard():
 
             if registros:
                 st.markdown("---")
-                st.subheader("Recaudación por empleado")
-                datos_grafica = df.assign(
-                    empleado=df["nombre_usuario"].fillna(df["operador"]).replace("", "Sin nombre"),
-                    total_caja=pd.to_numeric(df["total_caja"], errors="coerce").fillna(0)
-                )
-                recaudacion = (
-                    datos_grafica.groupby("empleado", as_index=False)["total_caja"]
-                    .sum()
-                    .rename(columns={"total_caja": "Recaudación"})
-                    .sort_values("Recaudación", ascending=False)
-                )
-                grafica = (
-                    alt.Chart(recaudacion)
-                    .mark_bar(cornerRadiusEnd=4)
-                    .encode(
-                        y=alt.Y("empleado:N", sort="-x", title="Empleado"),
-                        x=alt.X("Recaudación:Q", title="Total de caja ($)"),
-                        color=alt.Color("empleado:N", legend=None),
-                        tooltip=[
-                            alt.Tooltip("empleado:N", title="Empleado"),
-                            alt.Tooltip("Recaudación:Q", title="Recaudación", format="$,.2f")
-                        ]
-                    )
-                    .properties(height=max(180, 48 * len(recaudacion)))
-                )
-                st.altair_chart(grafica, use_container_width=True)
-
                 st.subheader("Registro Global de Auditoría")
                 st.dataframe(
                     df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja", "timestamp_servidor"]],
