@@ -28,7 +28,7 @@
         .excel-blue { background-color: #cfe2f3 !important; color: #000; font-weight: bold; }
         .excel-dark-blue { background-color: #1a73e8 !important; color: #fff; font-weight: bold; }
 
-        /* Contenedor para inputs con sÃ­mbolo de peso */
+        /* Contenedor para inputs con simbolo de peso */
         .input-group-peso {
             display: flex;
             align-items: center;
@@ -65,22 +65,9 @@
         input.editable-texto-largo:focus { background: #e8f0fe; }
         input.editable-texto-largo[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
 
-        /* Estilos especÃ­ficos para la derecha */
+        /* Estilos especificos para la derecha */
         .tabla-derecha td {
             padding: 2px 2px !important;
-        }
-        .tabla-inicio {
-            min-width: 0;
-            width: 100%;
-            table-layout: fixed;
-        }
-        .tabla-inicio td,
-        .tabla-inicio th {
-            overflow: hidden;
-        }
-        .tabla-inicio .input-group-peso {
-            min-width: 0;
-            width: 100%;
         }
         input.editable-der { 
             width: 100%;
@@ -123,21 +110,6 @@
             input.editable-der { font-size: 10px; }
             input.editable-der-ancho { font-size: 10px; min-width: 90px; }
             .input-group-peso span { font-size: 10px; }
-            .tabla-inicio {
-                table-layout: fixed;
-                min-width: 0;
-            }
-            .tabla-inicio td,
-            .tabla-inicio th {
-                min-width: 0 !important;
-                overflow: hidden;
-            }
-            .tabla-inicio input.editable-der,
-            .tabla-inicio input.editable-der-ancho {
-                min-width: 0;
-                max-width: 100%;
-                width: 100%;
-            }
         }
 
         @media print {
@@ -174,7 +146,7 @@
                         </tr>
                     </thead>
                     <tbody id="filasPrincipales">
-                        <!-- Carga dinÃ¡mica -->
+                        <!-- Carga dinamica -->
                     </tbody>
                 </table>
             </div>
@@ -185,7 +157,7 @@
         <div class="col-lg-4 ps-lg-1">
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
-            <table class="mb-2 tabla-derecha tabla-inicio">
+            <table class="mb-2 tabla-derecha">
                 <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
@@ -304,8 +276,8 @@
 
 <!-- Botones de Guardar (Imagen y PDF) -->
 <div class="text-center mt-4 mb-5 no-print">
-    <button id="btnImagen" class="btn btn-success btn-lg px-4 shadow me-2 mb-2" onclick="guardarYGenerarImagen()">ðŸ“· Guardar como Imagen</button>
-    <button id="btnPdf" class="btn btn-primary btn-lg px-4 shadow mb-2" onclick="guardarYGenerarPDF()">ðŸ“„ Guardar como PDF Directo</button>
+    <button id="btnImagen" class="btn btn-success btn-lg px-4 shadow me-2 mb-2" onclick="guardarYGenerarImagen()">Guardar como Imagen</button>
+    <button id="btnPdf" class="btn btn-primary btn-lg px-4 shadow mb-2" onclick="guardarYGenerarPDF()">Guardar como PDF Directo</button>
 </div>
 
 <script>
