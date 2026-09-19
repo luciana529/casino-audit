@@ -69,6 +69,19 @@
         .tabla-derecha td {
             padding: 2px 2px !important;
         }
+        .tabla-inicio {
+            min-width: 0;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .tabla-inicio td,
+        .tabla-inicio th {
+            overflow: hidden;
+        }
+        .tabla-inicio .input-group-peso {
+            min-width: 0;
+            width: 100%;
+        }
         input.editable-der { 
             width: 100%;
             max-width: 320px;
@@ -110,6 +123,21 @@
             input.editable-der { font-size: 10px; }
             input.editable-der-ancho { font-size: 10px; min-width: 90px; }
             .input-group-peso span { font-size: 10px; }
+            .tabla-inicio {
+                table-layout: fixed;
+                min-width: 0;
+            }
+            .tabla-inicio td,
+            .tabla-inicio th {
+                min-width: 0 !important;
+                overflow: hidden;
+            }
+            .tabla-inicio input.editable-der,
+            .tabla-inicio input.editable-der-ancho {
+                min-width: 0;
+                max-width: 100%;
+                width: 100%;
+            }
         }
 
         @media print {
@@ -157,7 +185,7 @@
         <div class="col-lg-4 ps-lg-1">
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
-            <table class="mb-2 tabla-derecha">
+            <table class="mb-2 tabla-derecha tabla-inicio">
                 <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
