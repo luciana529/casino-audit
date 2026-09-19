@@ -194,7 +194,20 @@ window.addEventListener('beforeunload', () => {
 function asegurarIdsCampos() {
     document.querySelectorAll('input').forEach((input, index) => {
         if (!input.id) input.id = `campo-${index}`;
+        ajustarAnchoCampo(input);
     });
+}
+
+function ajustarAnchoCampo(elemento) {
+    if (!(elemento instanceof HTMLInputElement)) return;
+    const contenido = elemento.value || elemento.placeholder || '';
+    const canvas = ajustarAnchoCampo.canvas || (ajustarAnchoCampo.canvas = document.createElement('canvas'));
+    const context = canvas.getContext('2d');
+    context.font = getComputedStyle(elemento).font;
+    const ancho = Math.ceil(context.measureText(contenido).width) + 18;
+    const minimo = elemento.classList.contains('editable-texto-largo') ? 120 : 48;
+    elemento.style.width = `${Math.min(320, Math.max(minimo, ancho))}px`;
+    elemento.title = elemento.value;
 }
 
 function transmitirCambioWebSocket(elemento) {
@@ -202,6 +215,7 @@ function transmitirCambioWebSocket(elemento) {
         return;
     }
     asegurarIdsCampos();
+    ajustarAnchoCampo(elemento);
     if (!elemento.id || window.PLANILLA_READONLY) return;
 
     const cambio = {
