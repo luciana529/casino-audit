@@ -31,6 +31,7 @@ USUARIOS_LOCALES = [
 ]
 
 CIERRES_LOCALES = []
+ESTADOS_PLANILLA = {}
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -169,6 +170,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
             else:
                 payload["usuario_id"] = authenticated_user["id"]
+                if payload.get("element_id") and payload.get("value") is not None:
+                    ESTADOS_PLANILLA.setdefault(authenticated_user["id"], {})[payload["element_id"]] = payload["value"]
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
         manager.disconnect(websocket)
@@ -361,6 +364,7 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     if user["rol"] == "empleado":
         data.usuario_id = user["id"]
         data.operador = user["username"]
+    ESTADOS_PLANILLA[data.usuario_id or user["id"]] = dict(data.estado_planilla)
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -436,3 +440,7 @@ def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
         clave = usuario.get("usuario_id") or f"anonimo-{id(usuario)}"
         usuarios[str(clave)] = usuario
     return list(usuarios.values())
+
+@app.get("/api/v1/planilla/{user_id}/estado")
+def obtener_estado_planilla(user_id: int, _: Dict[str, Any] = Depends(admin_user)):
+    return ESTADOS_PLANILLA.get(user_id, {})

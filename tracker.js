@@ -140,6 +140,21 @@ function aplicarEstadoPlanilla(state) {
     guardarTemporal();
 }
 
+function iniciarSincronizacionForzada() {
+    if (window.WATCH_USER_ID === undefined || !window.API_TOKEN) return;
+    const estadoUrl = `${window.API_BASE_URL}/planilla/${window.WATCH_USER_ID}/estado`;
+    window.sincronizacionForzada = setInterval(async () => {
+        try {
+            const response = await fetch(estadoUrl, {
+                headers: { Authorization: `Bearer ${window.API_TOKEN}` }
+            });
+            if (response.ok) aplicarEstadoPlanilla(await response.json());
+        } catch (error) {
+            console.debug('No se pudo sincronizar el estado de la planilla.');
+        }
+    }, 1500);
+}
+
 function configurarTiempoReal() {
     if (!window.API_TOKEN) {
         console.warn('WebSocket no iniciado: falta el token de autenticación.');
@@ -201,6 +216,16 @@ function conectarTiempoReal(wsUrl) {
                 }));
             });
             window.cambiosPendientes = {};
+            if (!window.PLANILLA_READONLY) {
+                Object.entries(obtenerEstadoPlanilla()).forEach(([elementId, value]) => {
+                    window.wsTiempoReal.send(JSON.stringify({
+                        type: 'cell_update',
+                        usuario_id: window.CASINO_USER_ID ?? null,
+                        element_id: elementId,
+                        value: value
+                    }));
+                });
+            }
             if (window.PLANILLA_READONLY) {
                 document.querySelectorAll('input, button').forEach(element => {
                     element.disabled = true;
@@ -220,6 +245,7 @@ function conectarTiempoReal(wsUrl) {
 
 window.addEventListener('beforeunload', () => {
     clearInterval(window.presenciaInterval);
+    clearInterval(window.sincronizacionForzada);
     if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
         window.wsTiempoReal.close();
     }
@@ -285,4 +311,7 @@ document.addEventListener('DOMNodeInserted', event => {
     }
 });
 
-window.addEventListener('load', configurarTiempoReal);
+window.addEventListener('load', () => {
+    configurarTiempoReal();
+    iniciarSincronizacionForzada();
+});
