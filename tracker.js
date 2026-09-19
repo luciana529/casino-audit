@@ -95,9 +95,11 @@ function extraerYEnviarDatos() {
     .then(data => {
         console.log("Transacción enviada a la API de auditoría:", data);
         if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+            asegurarIdsCampos();
             window.wsTiempoReal.send(JSON.stringify({
                 type: 'closure_saved',
-                usuario_id: window.CASINO_USER_ID ?? null
+                usuario_id: window.CASINO_USER_ID ?? null,
+                state: obtenerEstadoPlanilla()
             }));
         }
         bloquearPlanilla();
@@ -123,6 +125,23 @@ function bloquearPlanilla() {
     });
 }
 
+function obtenerEstadoPlanilla() {
+    const state = {};
+    document.querySelectorAll('input, select, textarea').forEach(element => {
+        if (element.id) state[element.id] = element.value;
+    });
+    return state;
+}
+
+function aplicarEstadoPlanilla(state) {
+    if (!state) return;
+    Object.entries(state).forEach(([elementId, value]) => {
+        const element = document.getElementById(elementId);
+        if (element) element.value = value;
+    });
+    guardarTemporal();
+}
+
 function configurarTiempoReal() {
     if (!window.API_TOKEN) {
         console.warn('WebSocket no iniciado: falta el token de autenticación.');
@@ -141,8 +160,12 @@ function conectarTiempoReal(wsUrl) {
         window.wsTiempoReal.onmessage = event => {
             const data = JSON.parse(event.data);
             if (data.type === 'closure_saved') {
+                if (
+                    window.WATCH_USER_ID !== undefined &&
+                    Number(data.usuario_id) !== Number(window.WATCH_USER_ID)
+                ) return;
+                aplicarEstadoPlanilla(data.state);
                 guardarTemporal();
-                setTimeout(() => location.reload(), 150);
                 return;
             }
             if (
