@@ -160,6 +160,7 @@ function conectarTiempoReal(wsUrl) {
             }, 20000);
             Object.entries(window.cambiosPendientes || {}).forEach(([elementId, value]) => {
                 window.wsTiempoReal.send(JSON.stringify({
+                    type: 'cell_update',
                     usuario_id: window.CASINO_USER_ID ?? null,
                     element_id: elementId,
                     value: value
@@ -196,27 +197,43 @@ function asegurarIdsCampos() {
     });
 }
 
-document.addEventListener('input', event => {
-    const input = event.target;
-    if (input instanceof HTMLInputElement) {
-        asegurarIdsCampos();
+function transmitirCambioWebSocket(elemento) {
+    if (!(elemento instanceof HTMLInputElement || elemento instanceof HTMLSelectElement || elemento instanceof HTMLTextAreaElement)) {
+        return;
     }
-    if (
-        input instanceof HTMLInputElement &&
-        input.id &&
-        !window.PLANILLA_READONLY
-    ) {
-        const cambio = {
-            usuario_id: window.CASINO_USER_ID ?? null,
-            element_id: input.id,
-            value: input.value
-        };
-        if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
-            window.wsTiempoReal.send(JSON.stringify(cambio));
-        } else {
-            window.cambiosPendientes = window.cambiosPendientes || {};
-            window.cambiosPendientes[input.id] = input.value;
-        }
+    asegurarIdsCampos();
+    if (!elemento.id || window.PLANILLA_READONLY) return;
+
+    const cambio = {
+        type: 'cell_update',
+        usuario_id: window.CASINO_USER_ID ?? null,
+        element_id: elemento.id,
+        value: elemento.value
+    };
+    if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+        window.wsTiempoReal.send(JSON.stringify(cambio));
+    } else {
+        window.cambiosPendientes = window.cambiosPendientes || {};
+        window.cambiosPendientes[elemento.id] = elemento.value;
+    }
+}
+
+// Compatibilidad con los atributos oninput existentes en index.html.
+function emitirTiempoReal(elemento) {
+    transmitirCambioWebSocket(elemento);
+}
+
+document.addEventListener('input', event => {
+    transmitirCambioWebSocket(event.target);
+});
+
+document.addEventListener('change', event => {
+    transmitirCambioWebSocket(event.target);
+});
+
+document.addEventListener('DOMNodeInserted', event => {
+    if (event.target instanceof HTMLInputElement) {
+        asegurarIdsCampos();
     }
 });
 
