@@ -22,7 +22,18 @@
         }
 
         .table-responsive { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
-        .tabla-ingresos { width: max-content; min-width: 100%; }
+        .tabla-ingresos {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            table-layout: fixed;
+        }
+        .tabla-ingresos th,
+        .tabla-ingresos td {
+            min-width: 0;
+            max-width: 0;
+            overflow: hidden;
+        }
         .col-lg-8, .col-lg-4 { min-width: 0; }
         .bloque-derecha { max-width: 100%; min-width: 0; overflow-x: auto; }
         .bloque-derecha .tabla-derecha { min-width: max-content; }
