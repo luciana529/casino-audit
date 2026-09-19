@@ -119,6 +119,7 @@ function bloquearPlanilla() {
 }
 
 function obtenerEstadoPlanilla() {
+    asegurarIdsCampos();
     const state = {};
     document.querySelectorAll('input, select, textarea').forEach(element => {
         if (element.id) state[element.id] = element.value;
@@ -128,6 +129,10 @@ function obtenerEstadoPlanilla() {
 
 function aplicarEstadoPlanilla(state) {
     if (!state) return;
+    localStorage.removeItem('planilla_valores');
+    document.querySelectorAll('input, select, textarea').forEach(element => {
+        element.value = '';
+    });
     Object.entries(state).forEach(([elementId, value]) => {
         const element = document.getElementById(elementId);
         if (element) element.value = value;
