@@ -97,42 +97,6 @@ def mostrar_usuarios_conectados():
         st.caption("Estado de conexión no disponible.")
 
 @st.fragment(run_every="5s")
-def mostrar_mis_cierres(user):
-    st.subheader("Mis Cierres Enviados")
-    if st.button("🔄 Actualizar cierres", key="refresh_employee_closures"):
-        st.rerun()
-    try:
-        res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
-        if res.status_code == 200:
-            user_id = str(user.get("id"))
-            username = str(user.get("username", "")).strip().lower()
-            datos = [
-                registro for registro in res.json()
-                if str(registro.get("usuario_id")) == user_id
-                or str(registro.get("operador", "")).strip().lower() == username
-            ]
-            if datos:
-                st.dataframe(
-                    pd.DataFrame([
-                        {
-                            "Fecha": registro.get("fecha", ""),
-                            "Hora": registro.get("hora", ""),
-                            "Total de caja": f"${float(registro.get('total_caja', 0)):,.2f}",
-                            "Estado": "Enviado con éxito"
-                        }
-                        for registro in datos
-                    ]),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("No hay cierres asociados a este usuario.")
-        else:
-            st.error(f"La API respondió con HTTP {res.status_code}.")
-    except requests.RequestException as error:
-        st.error(f"No se pudo cargar tus cierres: {error}")
-
-@st.fragment(run_every="5s")
 def mostrar_dashboard():
     st.subheader("Métricas y Auditoría General")
     try:
@@ -263,17 +227,11 @@ if user["rol"] == "empleado":
     with accion:
         if st.button("🚪 Cerrar sesión", key="employee_logout_top", use_container_width=True):
             logout()
-    tab_p, tab_h = st.tabs(["📝 Llenar Planilla de Cierre", "📜 Mis Cierres Enviados"])
-    
-    with tab_p:
-        html_content = cargar_planilla(user["id"], user["nombre"], user["rol"])
-        if html_content:
-            components.html(html_content, height=850, scrolling=True)
-        else:
-            st.error("No se encontraron index.html y tracker.js junto a app.py.")
-            
-    with tab_h:
-        mostrar_mis_cierres(user)
+    html_content = cargar_planilla(user["id"], user["nombre"], user["rol"])
+    if html_content:
+        components.html(html_content, height=850, scrolling=True)
+    else:
+        st.error("No se encontraron index.html y tracker.js junto a app.py.")
 
 # --- VISTA ADMINISTRADOR ---
 elif user["rol"] == "admin":
