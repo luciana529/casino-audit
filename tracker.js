@@ -94,6 +94,12 @@ function extraerYEnviarDatos() {
     })
     .then(data => {
         console.log("Transacción enviada a la API de auditoría:", data);
+        if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+            window.wsTiempoReal.send(JSON.stringify({
+                type: 'closure_saved',
+                usuario_id: window.CASINO_USER_ID ?? null
+            }));
+        }
         bloquearPlanilla();
         return data;
     })
@@ -134,6 +140,11 @@ function conectarTiempoReal(wsUrl) {
         window.wsTiempoReal = new WebSocket(wsUrl);
         window.wsTiempoReal.onmessage = event => {
             const data = JSON.parse(event.data);
+            if (data.type === 'closure_saved') {
+                guardarTemporal();
+                setTimeout(() => location.reload(), 150);
+                return;
+            }
             if (
                 window.WATCH_USER_ID !== undefined &&
                 Number(data.usuario_id) !== Number(window.WATCH_USER_ID)
@@ -141,6 +152,7 @@ function conectarTiempoReal(wsUrl) {
             const element = document.getElementById(data.element_id);
             if (element && data.value !== undefined) {
                 element.value = data.value;
+                guardarTemporal();
             }
         };
         window.wsTiempoReal.onopen = () => {
