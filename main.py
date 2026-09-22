@@ -415,6 +415,8 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
         data.operador = user["username"]
     usuario_planilla_id = data.usuario_id or user["id"]
     imagen_bytes, imagen_mime = extraer_imagen(data)
+    datos_cierre = data.dict()
+    datos_cierre["hora"] = data.hora[:5]
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -427,7 +429,7 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
             "hora_inicio": data.hora_inicio,
             "hora_cierre": data.hora_cierre,
             "total_caja": data.total_caja,
-            "datos_json": json.dumps(data.dict()),
+            "datos_json": json.dumps(datos_cierre),
             "timestamp_servidor": "2026-03-27 10:00:00"
         }
         CIERRES_LOCALES.append(registro)
@@ -443,7 +445,7 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO cierres (usuario_id, operador, fecha, hora, total_caja, datos_json, imagen_planilla, imagen_mime) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-        (data.usuario_id, data.operador, data.fecha, data.hora, data.total_caja, json.dumps(data.dict(exclude={"imagen_planilla"})), psycopg2.Binary(imagen_bytes) if imagen_bytes else None, imagen_mime)
+        (data.usuario_id, data.operador, data.fecha, data.hora[:5], data.total_caja, json.dumps(datos_cierre), psycopg2.Binary(imagen_bytes) if imagen_bytes else None, imagen_mime)
     )
     conn.commit()
     cursor.close()

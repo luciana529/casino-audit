@@ -389,6 +389,22 @@
         campo.value = digitos.length > 2 ? `${digitos.slice(0, 2)}:${digitos.slice(2)}` : digitos;
     }
 
+    function validarHoras() {
+        actualizarHoraCierre();
+        const campos = [document.getElementById('horaInicio'), document.getElementById('horaCierre')];
+        const invalido = campos.find(campo => {
+            if (!campo || !campo.value) return false;
+            const coincidencia = /^(\d{2}):(\d{2})$/.exec(campo.value);
+            return !coincidencia || Number(coincidencia[1]) > 23 || Number(coincidencia[2]) > 59;
+        });
+        if (invalido) {
+            invalido.focus();
+            alert('Ingresa la hora en formato 24 horas: HH:MM, por ejemplo 23:45.');
+            return false;
+        }
+        return true;
+    }
+
     function agregarFila() {
         for (let i = 0; i < 15; i++) {
             agregarFilaHTML();
@@ -453,7 +469,7 @@
     }
 
     async function guardarYGenerarImagen() {
-        actualizarHoraCierre();
+        if (!validarHoras()) return;
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
@@ -478,7 +494,7 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
-        actualizarHoraCierre();
+        if (!validarHoras()) return;
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
