@@ -34,53 +34,66 @@ CIERRES_LOCALES = []
 ESTADOS_PLANILLA = {}
 
 def get_db():
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+    url = DATABASE_URL
+    if not url:
+        raise RuntimeError("DATABASE_URL no está configurada")
+
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgres://", 1)
+
+    if "railway.internal" in url:
+        return psycopg2.connect(url)
+    return psycopg2.connect(url, sslmode="require")
 
 def init_db():
     if DATABASE_URL:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(100) NOT NULL,
-                nombre VARCHAR(100) NOT NULL,
-                rol VARCHAR(20) NOT NULL DEFAULT 'empleado',
-                requiere_cambio_pass BOOLEAN DEFAULT TRUE
-            );
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cierres (
-                id SERIAL PRIMARY KEY,
-                usuario_id INT REFERENCES usuarios(id),
-                operador VARCHAR(100),
-                fecha VARCHAR(20),
-                hora VARCHAR(20),
-                total_caja NUMERIC,
-                datos_json JSONB,
-                timestamp_servidor TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        cursor.execute("SELECT COUNT(*) FROM usuarios;")
-        cantidad_usuarios = cursor.fetchone()[0]
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
 
-        # Solo crear las cuentas iniciales cuando la tabla todavía está vacía.
-        # Los cambios posteriores de username, password o rol quedan preservados.
-        if cantidad_usuarios == 0:
             cursor.execute("""
-                INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
-                VALUES
-                    ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
-                    ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    password VARCHAR(100) NOT NULL,
+                    nombre VARCHAR(100) NOT NULL,
+                    rol VARCHAR(20) NOT NULL DEFAULT 'empleado',
+                    requiere_cambio_pass BOOLEAN DEFAULT TRUE
+                );
             """)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cierres (
+                    id SERIAL PRIMARY KEY,
+                    usuario_id INT REFERENCES usuarios(id),
+                    operador VARCHAR(100),
+                    fecha VARCHAR(20),
+                    hora VARCHAR(20),
+                    total_caja NUMERIC,
+                    datos_json JSONB,
+                    timestamp_servidor TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            cursor.execute("SELECT COUNT(*) FROM usuarios;")
+            cantidad_usuarios = cursor.fetchone()[0]
+
+            # Solo crear las cuentas iniciales cuando la tabla todavía está vacía.
+            # Los cambios posteriores de username, password o rol quedan preservados.
+            if cantidad_usuarios == 0:
+                cursor.execute("""
+                    INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
+                    VALUES
+                        ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
+                        ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
+                """)
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("--- BASE DE DATOS INICIALIZADA CON ÉXITO ---")
+        except Exception as error:
+            print(f"--- ERROR AL INICIALIZAR LA BASE DE DATOS: {error} ---")
 
 init_db()
 
