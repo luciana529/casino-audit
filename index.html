@@ -353,6 +353,8 @@
             limpiarPlanilla();
         } else {
             cargarTemporal();
+            const horaGuardada = document.getElementById('horaCierre');
+            if (horaGuardada) horaGuardada.value = '';
         }
     };
 
@@ -389,7 +391,6 @@
     }
 
     function validarHoras() {
-        actualizarHoraCierre();
         const campos = [document.getElementById('horaInicio'), document.getElementById('horaCierre')];
         const invalido = campos.find(campo => {
             if (!campo || !campo.value) return false;
@@ -468,6 +469,7 @@
     }
 
     async function guardarYGenerarImagen() {
+        actualizarHoraCierre();
         if (!validarHoras()) return;
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;
@@ -493,6 +495,7 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
+        actualizarHoraCierre();
         if (!validarHoras()) return;
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;

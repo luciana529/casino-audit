@@ -169,7 +169,7 @@ def mostrar_control_cierres():
             if imagen and imagen.startswith("data:image/"):
                 try:
                     _, contenido = imagen.split(",", 1)
-                    imagen_bytes = base64.b64decode(contenido, validate=True)
+                    imagen_bytes = base64.b64decode("".join(contenido.split()), validate=False)
                     st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
                     st.download_button(
                         "Descargar imagen",
@@ -178,7 +178,7 @@ def mostrar_control_cierres():
                         mime="image/jpeg",
                         key=f"descargar_imagen_{cierre_id}"
                     )
-                except (ValueError, base64.binascii.Error):
+                except Exception:
                     st.warning("La imagen de este cierre está dañada o incompleta.")
             else:
                 st.info("Este cierre no tiene una imagen guardada.")
