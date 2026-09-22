@@ -78,7 +78,7 @@ function extraerYEnviarDatos() {
     const controlador = new AbortController();
     const timeout = setTimeout(() => controlador.abort(), 10000);
 
-    return fetch(`${window.API_BASE_URL || 'https://casino-audit-production.up.railway.app/api/v1'}/cierre`, {
+    return fetch(`${window.API_BASE_URL || 'http://127.0.0.1:8000/api/v1'}/cierre`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -160,7 +160,7 @@ function configurarTiempoReal() {
         console.warn('WebSocket no iniciado: falta el token de autenticación.');
         return;
     }
-    const apiUrl = new URL(window.API_BASE_URL || 'https://casino-audit-production.up.railway.app/api/v1');
+    const apiUrl = new URL(window.API_BASE_URL || 'http://127.0.0.1:8000/api/v1');
     const wsScheme = apiUrl.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${wsScheme}://${apiUrl.host}/ws/live?token=${encodeURIComponent(window.API_TOKEN)}`;
     asegurarIdsCampos();
