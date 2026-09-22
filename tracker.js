@@ -1,6 +1,6 @@
 function extraerYEnviarDatos(imagenPlanilla = null) {
     const operador = document.getElementById('nombre')?.value || "Sin Nombre";
-    const fecha = document.getElementById('fecha')?.value || new Date().toISOString().slice(0, 10);
+    const fecha = document.getElementById('fecha')?.value || '';
     const horaInicio = document.getElementById('horaInicio')?.value || '';
     const horaCierre = document.getElementById('horaCierre')?.value || new Date().toLocaleTimeString();
     const hora = horaCierre;
