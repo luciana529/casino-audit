@@ -112,7 +112,7 @@ def mostrar_dashboard():
                 st.markdown("---")
                 st.subheader("Registro Global de Auditoría")
                 st.dataframe(
-                    df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja", "timestamp_servidor"]],
+                    df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]],
                     use_container_width=True
                 )
             else:
@@ -138,7 +138,7 @@ def mostrar_control_cierres():
     columnas = [
         columna for columna in [
             "id", "nombre_usuario", "operador", "fecha", "hora",
-            "total_caja", "timestamp_servidor"
+            "total_caja"
         ] if columna in filas.columns
     ]
     st.dataframe(filas[columnas], hide_index=True, use_container_width=True)
