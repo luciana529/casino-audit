@@ -6,6 +6,7 @@ import json
 import base64
 import os
 import altair as alt
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -99,28 +100,30 @@ def mostrar_usuarios_conectados():
 
 @st.fragment(run_every="5s")
 def mostrar_dashboard():
-    st.subheader("Métricas y Auditoría General")
+    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+    st.subheader(f"Métricas del día: {fecha_hoy}")
     try:
         res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
         if res.status_code == 200:
             registros = res.json()
             df = pd.DataFrame(registros)
-            total_cierres = len(df)
-            total_recaudado = pd.to_numeric(df["total_caja"], errors="coerce").fillna(0).sum() if not df.empty else 0
+            df_dia = df[df["fecha"].astype(str) == fecha_hoy] if not df.empty and "fecha" in df.columns else pd.DataFrame()
+            total_cierres = len(df_dia)
+            total_recaudado = pd.to_numeric(df_dia["total_caja"], errors="coerce").fillna(0).sum() if not df_dia.empty else 0
 
             m1, m2 = st.columns(2)
             m1.metric("Total Cierres", total_cierres)
             m2.metric("Total Recaudado", f"${total_recaudado:,.2f}")
 
-            if registros:
+            if not df_dia.empty:
                 st.markdown("---")
-                st.subheader("Registro Global de Auditoría")
+                st.subheader(f"Cierres registrados hoy ({fecha_hoy})")
                 st.dataframe(
-                    df[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]],
+                    df_dia[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]],
                     use_container_width=True
                 )
             else:
-                st.info("No hay cierres registrados todavía.")
+                st.info("Todavía no hay cierres registrados para hoy.")
         else:
             st.error(f"La API respondió con HTTP {res.status_code}.")
     except requests.RequestException as error:
@@ -147,41 +150,53 @@ def mostrar_control_cierres():
     ]
     st.dataframe(filas[columnas], hide_index=True, use_container_width=True)
 
-    st.markdown("### Planillas guardadas")
+    cierres_por_fecha = {}
     for cierre in cierres:
-        cierre_id = cierre.get("id")
-        datos = cierre.get("datos_json", {})
-        if isinstance(datos, str):
-            try:
-                datos = json.loads(datos)
-            except json.JSONDecodeError:
-                datos = {}
+        cierres_por_fecha.setdefault(str(cierre.get("fecha") or "Sin fecha"), []).append(cierre)
 
-        with st.expander(
-            f"Cierre #{cierre_id} | {cierre.get('nombre_usuario', cierre.get('operador', 'Sin operador'))} | {cierre.get('fecha', '')}"
-        ):
-            imagen_base64 = cierre.get("imagen_planilla_base64")
-            imagen_mime = cierre.get("imagen_mime") or "jpeg"
-            imagen = (
-                f"data:image/{imagen_mime};base64,{imagen_base64}"
-                if imagen_base64 else (datos.get("imagen_planilla") if isinstance(datos, dict) else None)
-            )
-            if imagen and imagen.startswith("data:image/"):
-                try:
-                    _, contenido = imagen.split(",", 1)
-                    imagen_bytes = base64.b64decode("".join(contenido.split()), validate=False)
-                    st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
-                    st.download_button(
-                        "Descargar imagen",
-                        data=imagen_bytes,
-                        file_name=f"planilla_cierre_{cierre_id}.jpg",
-                        mime="image/jpeg",
-                        key=f"descargar_imagen_{cierre_id}"
+    st.markdown("### Planillas guardadas por fecha")
+    for fecha, cierres_dia in sorted(cierres_por_fecha.items(), reverse=True):
+        total_dia = sum(float(cierre.get("total_caja") or 0) for cierre in cierres_dia)
+        with st.expander(f"📅 {fecha} | {len(cierres_dia)} cierres | Total: ${total_dia:,.2f}", expanded=fecha == max(cierres_por_fecha)):
+            filas_dia = pd.DataFrame(cierres_dia)
+            columnas_dia = [
+                columna for columna in ["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]
+                if columna in filas_dia.columns
+            ]
+            st.dataframe(filas_dia[columnas_dia], hide_index=True, use_container_width=True)
+
+            for cierre in cierres_dia:
+                cierre_id = cierre.get("id")
+                datos = cierre.get("datos_json", {})
+                if isinstance(datos, str):
+                    try:
+                        datos = json.loads(datos)
+                    except json.JSONDecodeError:
+                        datos = {}
+
+                with st.expander(f"Planilla #{cierre_id} | {cierre.get('nombre_usuario', cierre.get('operador', 'Sin operador'))}"):
+                    imagen_base64 = cierre.get("imagen_planilla_base64")
+                    imagen_mime = cierre.get("imagen_mime") or "jpeg"
+                    imagen = (
+                        f"data:image/{imagen_mime};base64,{imagen_base64}"
+                        if imagen_base64 else (datos.get("imagen_planilla") if isinstance(datos, dict) else None)
                     )
-                except Exception:
-                    st.warning("La imagen de este cierre está dañada o incompleta.")
-            else:
-                st.info("Este cierre no tiene una imagen guardada.")
+                    if imagen and imagen.startswith("data:image/"):
+                        try:
+                            _, contenido = imagen.split(",", 1)
+                            imagen_bytes = base64.b64decode("".join(contenido.split()), validate=False)
+                            st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
+                            st.download_button(
+                                "Descargar imagen",
+                                data=imagen_bytes,
+                                file_name=f"planilla_cierre_{cierre_id}.jpg",
+                                mime="image/jpeg",
+                                key=f"descargar_imagen_{cierre_id}"
+                            )
+                        except Exception:
+                            st.warning("La imagen de este cierre está dañada o incompleta.")
+                    else:
+                        st.info("Este cierre no tiene una imagen guardada.")
 
 if "user" not in st.session_state:
     st.session_state.user = None
