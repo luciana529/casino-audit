@@ -349,7 +349,6 @@
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
         }
-        actualizarHoraCierre();
         if (window.PLANILLA_READONLY) {
             limpiarPlanilla();
         } else {
@@ -381,7 +380,7 @@
 
     function actualizarHoraCierre() {
         const campo = document.getElementById('horaCierre');
-        if (campo && !campo.value) campo.value = horaActual();
+        if (campo) campo.value = horaActual();
     }
 
     function formatearHora(campo) {
