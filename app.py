@@ -156,7 +156,12 @@ def mostrar_control_cierres():
         with st.expander(
             f"Cierre #{cierre_id} | {cierre.get('nombre_usuario', cierre.get('operador', 'Sin operador'))} | {cierre.get('fecha', '')}"
         ):
-            imagen = datos.get("imagen_planilla") if isinstance(datos, dict) else None
+            imagen_base64 = cierre.get("imagen_planilla_base64")
+            imagen_mime = cierre.get("imagen_mime") or "jpeg"
+            imagen = (
+                f"data:image/{imagen_mime};base64,{imagen_base64}"
+                if imagen_base64 else (datos.get("imagen_planilla") if isinstance(datos, dict) else None)
+            )
             if imagen and imagen.startswith("data:image/"):
                 try:
                     _, contenido = imagen.split(",", 1)

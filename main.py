@@ -74,6 +74,8 @@ def init_db():
                     timestamp_servidor TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_planilla BYTEA;")
+            cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_mime VARCHAR(50);")
 
             cursor.execute("SELECT COUNT(*) FROM usuarios;")
             cantidad_usuarios = cursor.fetchone()[0]
@@ -225,6 +227,17 @@ class CierreCaja(BaseModel):
     total_caja: float
     imagen_planilla: Optional[str] = None
     estado_planilla: Dict[str, str] = {}
+
+def extraer_imagen(data: CierreCaja):
+    if not data.imagen_planilla or "," not in data.imagen_planilla:
+        return None, None
+    mime, contenido = data.imagen_planilla.split(",", 1)
+    if not mime.startswith("data:image/"):
+        return None, None
+    try:
+        return base64.b64decode(contenido, validate=True), mime[5:].split(";", 1)[0]
+    except (ValueError, base64.binascii.Error):
+        raise HTTPException(status_code=400, detail="La imagen de la planilla no es válida")
 
 # --- ENDPOINTS USUARIOS (CRUD) ---
 @app.post("/api/v1/login")
@@ -401,6 +414,7 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
         data.usuario_id = user["id"]
         data.operador = user["username"]
     usuario_planilla_id = data.usuario_id or user["id"]
+    imagen_bytes, imagen_mime = extraer_imagen(data)
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -428,8 +442,8 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO cierres (usuario_id, operador, fecha, hora, total_caja, datos_json) VALUES (%s, %s, %s, %s, %s, %s)",
-        (data.usuario_id, data.operador, data.fecha, data.hora, data.total_caja, json.dumps(data.dict()))
+        "INSERT INTO cierres (usuario_id, operador, fecha, hora, total_caja, datos_json, imagen_planilla, imagen_mime) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (data.usuario_id, data.operador, data.fecha, data.hora, data.total_caja, json.dumps(data.dict(exclude={"imagen_planilla"})), psycopg2.Binary(imagen_bytes) if imagen_bytes else None, imagen_mime)
     )
     conn.commit()
     cursor.close()
@@ -453,14 +467,14 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     if user["rol"] == "admin":
         cursor.execute("""
-            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, encode(c.imagen_planilla, 'base64') as imagen_planilla_base64, c.imagen_mime, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             ORDER BY c.id DESC;
         """)
     else:
         cursor.execute("""
-            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, encode(c.imagen_planilla, 'base64') as imagen_planilla_base64, c.imagen_mime, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             WHERE c.usuario_id = %s

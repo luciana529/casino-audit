@@ -134,7 +134,7 @@
         input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
 
         .tabla-inicio input[type="date"],
-        .tabla-inicio input[type="time"] {
+        .tabla-inicio input[type="text"].hora-campo {
             min-width: 0;
             max-width: 100%;
             width: 100%;
@@ -142,27 +142,9 @@
             display: block;
             padding: 0;
             font-size: 12px;
-            appearance: none;
-            -webkit-appearance: none;
-        }
-
-        .tabla-inicio input[type="date"] {
-            min-width: 0;
-            max-width: 100%;
-            width: 100%;
-            box-sizing: border-box;
-            display: block;
             padding: 0 2px;
-            font-size: 11px;
-        }
-
-        .tabla-inicio input[type="time"]::-webkit-datetime-edit,
-        .tabla-inicio input[type="time"]::-webkit-datetime-edit-fields-wrapper {
-            padding: 0;
-        }
-
-        .tabla-inicio input[type="time"]::-webkit-calendar-picker-indicator {
-            display: none;
+            font-size: 14px;
+            text-align: center;
         }
 
         .tabla-inicio input#nombre {
@@ -232,9 +214,9 @@
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
                     <td class="excel-blue" style="width: 20%;">INICIO</td>
-                    <td style="width: 30%;"><input type="time" id="horaInicio" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 30%;"><input type="text" id="horaInicio" class="editable-der hora-campo" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="formatearHora(this); guardarTemporal()" onblur="bloquearCasilla(this)"></td>
                     <td class="excel-blue" style="width: 20%;">CIERRE</td>
-                    <td style="width: 30%;"><input type="time" id="horaCierre" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 30%;"><input type="text" id="horaCierre" class="editable-der hora-campo" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="formatearHora(this); guardarTemporal()" onblur="bloquearCasilla(this)"></td>
                 </tr>
             </table>
 
@@ -355,6 +337,7 @@
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
         }
+        actualizarHoraCierre();
         if (window.PLANILLA_READONLY) {
             limpiarPlanilla();
         } else {
@@ -377,6 +360,21 @@
             <td><div class="input-group-peso"><span>$</span><input type="text" class="editable" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></div></td>
         `;
         tbody.appendChild(tr);
+    }
+
+    function horaActual() {
+        const ahora = new Date();
+        return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function actualizarHoraCierre() {
+        const campo = document.getElementById('horaCierre');
+        if (campo && !campo.value) campo.value = horaActual();
+    }
+
+    function formatearHora(campo) {
+        const digitos = campo.value.replace(/\D/g, '').slice(0, 4);
+        campo.value = digitos.length > 2 ? `${digitos.slice(0, 2)}:${digitos.slice(2)}` : digitos;
     }
 
     function agregarFila() {
@@ -443,6 +441,7 @@
     }
 
     async function guardarYGenerarImagen() {
+        actualizarHoraCierre();
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
@@ -467,6 +466,7 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
+        actualizarHoraCierre();
         const imgData = await capturarImagenPlanilla();
         if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
