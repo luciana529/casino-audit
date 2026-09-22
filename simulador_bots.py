@@ -5,8 +5,8 @@ import random
 import json
 import os
 
-BASE_URL = os.getenv("BOT_API_URL", "https://casino-audit-production.up.railway.app").rstrip("/")
-WS_URL = os.getenv("BOT_WS_URL", "wss://casino-audit-production.up.railway.app/ws/live")
+BASE_URL = os.getenv("BOT_API_URL", "https://casino-audit-api.onrender.com").rstrip("/")
+WS_URL = os.getenv("BOT_WS_URL", "wss://casino-audit-api.onrender.com/ws/live")
 BOT_PASSWORD = os.getenv("BOT_PASSWORD", "12345")
 BOT_COUNT = int(os.getenv("BOT_COUNT", "21"))
 

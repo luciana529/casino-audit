@@ -27,7 +27,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 DEFAULT_API_URL = (
-    "https://casino-audit-production.up.railway.app/api/v1"
+    "https://casino-audit-api.onrender.com/api/v1"
 )
 API_URL = os.getenv("API_URL", DEFAULT_API_URL).rstrip("/")
 BASE_DIR = Path(__file__).resolve().parent
