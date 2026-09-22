@@ -24,6 +24,7 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-render")
 TOKEN_TTL_SECONDS = 8 * 60 * 60
+MAX_EMPLEADOS = 23
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -320,6 +321,9 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
     if data.rol != "empleado":
         raise HTTPException(status_code=403, detail="Los administradores se cargan manualmente")
     if not DATABASE_URL:
+        empleados_actuales = sum(1 for usuario in USUARIOS_LOCALES if usuario["rol"] == "empleado")
+        if empleados_actuales >= MAX_EMPLEADOS:
+            raise HTTPException(status_code=400, detail="Se alcanzó el límite de 23 empleados. Para agregar más personas, consulta al desarrollador.")
         nuevo_id = len(USUARIOS_LOCALES) + 1
         nuevo_u = {"id": nuevo_id, "username": data.username.strip(), "password": data.password.strip(), "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
         USUARIOS_LOCALES.append(nuevo_u)
@@ -328,6 +332,10 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
     conn = get_db()
     cursor = conn.cursor()
     try:
+        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE rol = 'empleado';")
+        empleados_actuales = cursor.fetchone()[0]
+        if empleados_actuales >= MAX_EMPLEADOS:
+            raise HTTPException(status_code=400, detail="Se alcanzó el límite de 23 empleados. Para agregar más personas, consulta al desarrollador.")
         cursor.execute(
             "INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass) VALUES (%s, %s, %s, %s, TRUE);",
             (data.username.strip(), data.password.strip(), data.nombre, data.rol)
