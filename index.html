@@ -31,16 +31,16 @@
         .tabla-inicio {
             display: table;
             width: 100% !important;
-            min-width: 0 !important;
+            min-width: 520px !important;
             max-width: 100% !important;
             table-layout: fixed;
-            overflow: hidden;
+            overflow: visible;
         }
         .tabla-inicio td,
         .tabla-inicio th {
             min-width: 0 !important;
-            max-width: 0;
-            overflow: hidden;
+            max-width: none;
+            overflow: visible;
         }
         .tabla-inicio input.editable-der,
         .tabla-inicio input.editable-der-ancho {
@@ -132,6 +132,18 @@
         }
         input.editable-der-ancho:focus { background: #e8f0fe; }
         input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        .tabla-inicio input[type="date"],
+        .tabla-inicio input[type="time"] {
+            min-width: 150px;
+            width: 100%;
+            font-size: 13px;
+        }
+
+        .tabla-inicio input#nombre {
+            min-width: 180px;
+            font-size: 13px;
+        }
 
         @media (max-width: 991.98px) {
             body { padding: 5px; }
@@ -318,10 +330,7 @@
             agregarFilaHTML();
         }
         if (window.PLANILLA_READONLY) {
-            localStorage.removeItem('planilla_valores');
-            document.querySelectorAll('input, select, textarea').forEach(input => {
-                input.value = '';
-            });
+            limpiarPlanilla();
         } else {
             cargarTemporal();
         }
@@ -345,7 +354,9 @@
     }
 
     function agregarFila() {
-        agregarFilaHTML();
+        for (let i = 0; i < 15; i++) {
+            agregarFilaHTML();
+        }
         asegurarIdsCampos();
         guardarTemporal();
     }
@@ -362,11 +373,11 @@
         inputs.forEach(input => {
             valores.push(input.value);
         });
-        localStorage.setItem('planilla_valores', JSON.stringify(valores));
+        localStorage.setItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`, JSON.stringify(valores));
     }
 
     function cargarTemporal() {
-        let guardados = localStorage.getItem('planilla_valores');
+        let guardados = localStorage.getItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`);
         if (guardados) {
             let valores = JSON.parse(guardados);
             let inputsFijos = 30; 
@@ -394,40 +405,43 @@
     }
 
     async function guardarYGenerarImagen() {
-        const registro = await extraerYEnviarDatos();
+        const element = document.getElementById('planillaToPrint');
+        const canvas = await html2canvas(element, { scale: 1.5, windowWidth: 1400 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.75);
+        const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
-        const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
         const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
                         String(ahora.getMinutes()).padStart(2, '0') + '-' + 
                         String(ahora.getSeconds()).padStart(2, '0');
 
-        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
+        Promise.resolve().then(() => {
             const link = document.createElement('a');
-            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.png`;
-            link.href = canvas.toDataURL('image/png');
+            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
+            link.href = imgData;
             link.click();
             
-            localStorage.removeItem('planilla_valores');
+            limpiarPlanilla();
             location.reload();
         });
     }
 
     async function guardarYGenerarPDF() {
-        const registro = await extraerYEnviarDatos();
+        const element = document.getElementById('planillaToPrint');
+        const canvas = await html2canvas(element, { scale: 1.5, windowWidth: 1400 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.75);
+        const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
-        const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
         const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
                         String(ahora.getMinutes()).padStart(2, '0') + '-' + 
                         String(ahora.getSeconds()).padStart(2, '0');
 
-        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
+        Promise.resolve().then(() => {
             const { jsPDF } = window.jspdf;
             
             const pdf = new jsPDF('l', 'mm', 'a4');
@@ -450,7 +464,7 @@
             pdf.save(`Cierre_Turno_${fechaStr}_${horaStr}.pdf`);
             
             setTimeout(() => {
-                localStorage.removeItem('planilla_valores');
+                limpiarPlanilla();
                 location.reload();
             }, 1000);
         });

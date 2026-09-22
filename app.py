@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import requests
 import pandas as pd
 import json
+import base64
 import os
 import altair as alt
 from pathlib import Path
@@ -121,6 +122,56 @@ def mostrar_dashboard():
     except requests.RequestException as error:
         st.error(f"No se pudo conectar con la API: {error}")
 
+def mostrar_control_cierres():
+    st.subheader("Control de cierres")
+    res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
+    if res.status_code != 200:
+        st.error(f"No se pudieron cargar los cierres. HTTP {res.status_code}.")
+        return
+
+    cierres = res.json()
+    if not cierres:
+        st.info("No hay cierres registrados todavía.")
+        return
+
+    filas = pd.DataFrame(cierres)
+    columnas = [
+        columna for columna in [
+            "id", "nombre_usuario", "operador", "fecha", "hora",
+            "total_caja", "timestamp_servidor"
+        ] if columna in filas.columns
+    ]
+    st.dataframe(filas[columnas], hide_index=True, use_container_width=True)
+
+    st.markdown("### Planillas guardadas")
+    for cierre in cierres:
+        cierre_id = cierre.get("id")
+        datos = cierre.get("datos_json", {})
+        if isinstance(datos, str):
+            try:
+                datos = json.loads(datos)
+            except json.JSONDecodeError:
+                datos = {}
+
+        with st.expander(
+            f"Cierre #{cierre_id} | {cierre.get('nombre_usuario', cierre.get('operador', 'Sin operador'))} | {cierre.get('fecha', '')}"
+        ):
+            imagen = datos.get("imagen_planilla") if isinstance(datos, dict) else None
+            if imagen and imagen.startswith("data:image/"):
+                _, contenido = imagen.split(",", 1)
+                imagen_bytes = base64.b64decode(contenido)
+                if st.button("🖼️ Ver planilla guardada", key=f"ver_imagen_{cierre_id}"):
+                    st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
+                st.download_button(
+                    "Descargar imagen",
+                    data=imagen_bytes,
+                    file_name=f"planilla_cierre_{cierre_id}.jpg",
+                    mime="image/jpeg",
+                    key=f"descargar_imagen_{cierre_id}"
+                )
+            else:
+                st.info("Este cierre no tiene una imagen guardada.")
+
 if "user" not in st.session_state:
     st.session_state.user = None
 if "api_token" not in st.session_state:
@@ -211,7 +262,7 @@ elif user["rol"] == "admin":
         if st.button("🚪 Cerrar sesión", key="admin_logout_top", use_container_width=True):
             logout()
 
-    acceso_dashboard, acceso_supervision, acceso_crud = st.columns(3)
+    acceso_dashboard, acceso_supervision, acceso_crud, acceso_cierres = st.columns(4)
     with acceso_dashboard:
         if st.button("📊 Dashboard", use_container_width=True, key="admin_dashboard_main"):
             st.session_state.admin_section = "dashboard"
@@ -223,6 +274,10 @@ elif user["rol"] == "admin":
     with acceso_crud:
         if st.button("⚙️ CRUD de Empleados", use_container_width=True, key="admin_crud_main"):
             st.session_state.admin_section = "crud"
+            st.rerun()
+    with acceso_cierres:
+        if st.button("📋 Control de Cierres", use_container_width=True, key="admin_cierres_main"):
+            st.session_state.admin_section = "cierres"
             st.rerun()
 
     if "admin_section" not in st.session_state:
@@ -237,6 +292,9 @@ elif user["rol"] == "admin":
         st.rerun()
     if st.sidebar.button("⚙️ CRUD de Empleados", use_container_width=True, key="admin_crud"):
         st.session_state.admin_section = "crud"
+        st.rerun()
+    if st.sidebar.button("📋 Control de Cierres", use_container_width=True, key="admin_cierres"):
+        st.session_state.admin_section = "cierres"
         st.rerun()
 
     menu = st.session_state.admin_section
@@ -275,7 +333,11 @@ elif user["rol"] == "admin":
     elif menu == "dashboard":
         mostrar_dashboard()
 
-    # 3. GESTIÓN COMPLETA DE EMPLEADOS (CRUD)
+    # 3. CONTROL Y CONSULTA DE CIERRES
+    elif menu == "cierres":
+        mostrar_control_cierres()
+
+    # 4. GESTIÓN COMPLETA DE EMPLEADOS (CRUD)
     elif menu == "crud":
         st.subheader("Administración de Personal")
         

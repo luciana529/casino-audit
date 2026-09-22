@@ -223,6 +223,7 @@ class CierreCaja(BaseModel):
     ingresos: List[Dict[str, Any]]
     egresos: List[Dict[str, Any]]
     total_caja: float
+    imagen_planilla: Optional[str] = None
     estado_planilla: Dict[str, str] = {}
 
 # --- ENDPOINTS USUARIOS (CRUD) ---
@@ -399,7 +400,7 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     if user["rol"] == "empleado":
         data.usuario_id = user["id"]
         data.operador = user["username"]
-    ESTADOS_PLANILLA[data.usuario_id or user["id"]] = dict(data.estado_planilla)
+    usuario_planilla_id = data.usuario_id or user["id"]
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -419,8 +420,9 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
         await manager.broadcast(json.dumps({
             "type": "closure_saved",
             "usuario_id": user["id"],
-            "state": data.estado_planilla
+            "state": {}
         }))
+        ESTADOS_PLANILLA[usuario_planilla_id] = {}
         return {"status": "ok", "mensaje": "Cierre registrado"}
         
     conn = get_db()
@@ -435,8 +437,9 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     await manager.broadcast(json.dumps({
         "type": "closure_saved",
         "usuario_id": user["id"],
-        "state": data.estado_planilla
+        "state": {}
     }))
+    ESTADOS_PLANILLA[usuario_planilla_id] = {}
     return {"status": "ok", "mensaje": "Cierre registrado"}
 
 @app.get("/api/v1/registros")
