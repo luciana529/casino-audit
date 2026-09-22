@@ -280,6 +280,11 @@ function asegurarIdsCampos() {
 
 function ajustarAnchoCampo(elemento) {
     if (!(elemento instanceof HTMLInputElement)) return;
+    if (elemento.classList.contains('hora-campo')) {
+        elemento.style.width = '100%';
+        elemento.style.minWidth = '62px';
+        return;
+    }
     const contenido = elemento.value || elemento.placeholder || '';
     const canvas = ajustarAnchoCampo.canvas || (ajustarAnchoCampo.canvas = document.createElement('canvas'));
     const context = canvas.getContext('2d');

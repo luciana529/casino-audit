@@ -71,9 +71,21 @@
         .input-group-peso span {
             font-size: 11px;
             color: #555;
-            padding-left: 2px;
+            min-width: 62px;
+            font-size: 12px;
             font-weight: bold;
+            font-family: monospace;
+            letter-spacing: 0;
             user-select: none;
+
+        @media (max-width: 576px) {
+            .tabla-inicio input[type="text"].hora-campo {
+                min-width: 62px;
+                width: 100% !important;
+                font-size: 11px;
+                padding: 0;
+            }
+        }
         }
         
         /* Inputs generales (izquierda) */
