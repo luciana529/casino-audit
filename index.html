@@ -141,7 +141,9 @@
             box-sizing: border-box;
             display: block;
             padding: 0;
-            font-size: 11px;
+            font-size: 12px;
+            appearance: none;
+            -webkit-appearance: none;
         }
 
         .tabla-inicio input[type="date"] {
@@ -150,8 +152,17 @@
             width: 100%;
             box-sizing: border-box;
             display: block;
-            padding: 0;
+            padding: 0 2px;
             font-size: 11px;
+        }
+
+        .tabla-inicio input[type="time"]::-webkit-datetime-edit,
+        .tabla-inicio input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+            padding: 0;
+        }
+
+        .tabla-inicio input[type="time"]::-webkit-calendar-picker-indicator {
+            display: none;
         }
 
         .tabla-inicio input#nombre {
@@ -419,10 +430,21 @@
         }
     }
 
-    async function guardarYGenerarImagen() {
+    async function capturarImagenPlanilla() {
         const element = document.getElementById('planillaToPrint');
-        const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
-        const imgData = canvas.toDataURL('image/jpeg', 0.55);
+        try {
+            const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
+            return canvas.toDataURL('image/jpeg', 0.55);
+        } catch (error) {
+            console.error('No se pudo capturar la planilla:', error);
+            alert('No se pudo capturar la imagen de la planilla. El cierre no se guardó.');
+            return null;
+        }
+    }
+
+    async function guardarYGenerarImagen() {
+        const imgData = await capturarImagenPlanilla();
+        if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
@@ -445,8 +467,8 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
-        const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
-        const imgData = canvas.toDataURL('image/jpeg', 0.55);
+        const imgData = await capturarImagenPlanilla();
+        if (!imgData) return;
         const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
@@ -462,7 +484,7 @@
             const pdf = new jsPDF('l', 'mm', 'a4');
             const imgWidth = 297; 
             const pageHeight = 210; 
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const imgHeight = (element.clientHeight * imgWidth) / element.clientWidth;
             let heightLeft = imgHeight;
             let position = 0;
 

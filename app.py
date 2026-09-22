@@ -161,8 +161,7 @@ def mostrar_control_cierres():
                 try:
                     _, contenido = imagen.split(",", 1)
                     imagen_bytes = base64.b64decode(contenido, validate=True)
-                    if st.button("🖼️ Ver planilla guardada", key=f"ver_imagen_{cierre_id}"):
-                        st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
+                    st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
                     st.download_button(
                         "Descargar imagen",
                         data=imagen_bytes,
