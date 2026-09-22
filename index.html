@@ -39,7 +39,7 @@
         .tabla-inicio td,
         .tabla-inicio th {
             min-width: 0 !important;
-            max-width: 0;
+            max-width: 100%;
             overflow: hidden;
         }
         .tabla-inicio input.editable-der,
@@ -71,9 +71,21 @@
         .input-group-peso span {
             font-size: 11px;
             color: #555;
-            padding-left: 2px;
+            min-width: 62px;
+            font-size: 12px;
             font-weight: bold;
+            font-family: monospace;
+            letter-spacing: 0;
             user-select: none;
+
+        @media (max-width: 576px) {
+            .tabla-inicio input[type="text"].hora-campo {
+                min-width: 62px;
+                width: 100% !important;
+                font-size: 11px;
+                padding: 0;
+            }
+        }
         }
         
         /* Inputs generales (izquierda) */
@@ -132,6 +144,26 @@
         }
         input.editable-der-ancho:focus { background: #e8f0fe; }
         input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        .tabla-inicio input[type="date"],
+        .tabla-inicio input[type="text"].hora-campo {
+            min-width: 0;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            padding: 0;
+            font-size: 12px;
+            padding: 0 2px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .tabla-inicio input#nombre {
+            min-width: 0;
+            max-width: 100%;
+            font-size: 11px;
+        }
 
         @media (max-width: 991.98px) {
             body { padding: 5px; }
@@ -194,9 +226,9 @@
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
                     <td class="excel-blue" style="width: 20%;">INICIO</td>
-                    <td style="width: 30%;"><input type="time" id="horaInicio" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 30%;"><input type="text" id="horaInicio" class="editable-der hora-campo" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="formatearHora(this); guardarTemporal()" onblur="bloquearCasilla(this)"></td>
                     <td class="excel-blue" style="width: 20%;">CIERRE</td>
-                    <td style="width: 30%;"><input type="time" id="horaCierre" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
+                    <td style="width: 30%;"><input type="text" id="horaCierre" class="editable-der hora-campo" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="formatearHora(this); guardarTemporal()" onblur="bloquearCasilla(this)"></td>
                 </tr>
             </table>
 
@@ -317,11 +349,9 @@
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
         }
+        actualizarHoraCierre();
         if (window.PLANILLA_READONLY) {
-            localStorage.removeItem('planilla_valores');
-            document.querySelectorAll('input, select, textarea').forEach(input => {
-                input.value = '';
-            });
+            limpiarPlanilla();
         } else {
             cargarTemporal();
         }
@@ -344,8 +374,41 @@
         tbody.appendChild(tr);
     }
 
+    function horaActual() {
+        const ahora = new Date();
+        return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function actualizarHoraCierre() {
+        const campo = document.getElementById('horaCierre');
+        if (campo && !campo.value) campo.value = horaActual();
+    }
+
+    function formatearHora(campo) {
+        const digitos = campo.value.replace(/\D/g, '').slice(0, 4);
+        campo.value = digitos.length > 2 ? `${digitos.slice(0, 2)}:${digitos.slice(2)}` : digitos;
+    }
+
+    function validarHoras() {
+        actualizarHoraCierre();
+        const campos = [document.getElementById('horaInicio'), document.getElementById('horaCierre')];
+        const invalido = campos.find(campo => {
+            if (!campo || !campo.value) return false;
+            const coincidencia = /^(\d{2}):(\d{2})$/.exec(campo.value);
+            return !coincidencia || Number(coincidencia[1]) > 23 || Number(coincidencia[2]) > 59;
+        });
+        if (invalido) {
+            invalido.focus();
+            alert('Ingresa la hora en formato 24 horas: HH:MM, por ejemplo 23:45.');
+            return false;
+        }
+        return true;
+    }
+
     function agregarFila() {
-        agregarFilaHTML();
+        for (let i = 0; i < 15; i++) {
+            agregarFilaHTML();
+        }
         asegurarIdsCampos();
         guardarTemporal();
     }
@@ -362,11 +425,11 @@
         inputs.forEach(input => {
             valores.push(input.value);
         });
-        localStorage.setItem('planilla_valores', JSON.stringify(valores));
+        localStorage.setItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`, JSON.stringify(valores));
     }
 
     function cargarTemporal() {
-        let guardados = localStorage.getItem('planilla_valores');
+        let guardados = localStorage.getItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`);
         if (guardados) {
             let valores = JSON.parse(guardados);
             let inputsFijos = 30; 
@@ -393,64 +456,80 @@
         }
     }
 
+    async function capturarImagenPlanilla() {
+        const element = document.getElementById('planillaToPrint');
+        try {
+            const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
+            return canvas.toDataURL('image/jpeg', 0.55);
+        } catch (error) {
+            console.error('No se pudo capturar la planilla:', error);
+            alert('No se pudo capturar la imagen de la planilla. El cierre no se guardó.');
+            return null;
+        }
+    }
+
     async function guardarYGenerarImagen() {
-        const registro = await extraerYEnviarDatos();
+        if (!validarHoras()) return;
+        const imgData = await capturarImagenPlanilla();
+        if (!imgData) return;
+        const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
-        const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
         const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
                         String(ahora.getMinutes()).padStart(2, '0') + '-' + 
                         String(ahora.getSeconds()).padStart(2, '0');
 
-        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
+        Promise.resolve().then(() => {
             const link = document.createElement('a');
-            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.png`;
-            link.href = canvas.toDataURL('image/png');
+            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
+            link.href = imgData;
             link.click();
             
-            localStorage.removeItem('planilla_valores');
+            limpiarPlanilla();
             location.reload();
         });
     }
 
     async function guardarYGenerarPDF() {
-        const registro = await extraerYEnviarDatos();
+        const element = document.getElementById('planillaToPrint');
+        if (!validarHoras()) return;
+        const imgData = await capturarImagenPlanilla();
+        if (!imgData) return;
+        const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
-        const element = document.getElementById('planillaToPrint');
         const ahora = new Date();
         const fechaStr = document.getElementById('fecha').value || ahora.toISOString().slice(0, 10);
         const horaStr = String(ahora.getHours()).padStart(2, '0') + '-' + 
                         String(ahora.getMinutes()).padStart(2, '0') + '-' + 
                         String(ahora.getSeconds()).padStart(2, '0');
 
-        html2canvas(element, { scale: 2, windowWidth: 1400 }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
+        Promise.resolve().then(() => {
             const { jsPDF } = window.jspdf;
             
             const pdf = new jsPDF('l', 'mm', 'a4');
             const imgWidth = 297; 
             const pageHeight = 210; 
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const imgHeight = (element.clientHeight * imgWidth) / element.clientWidth;
             let heightLeft = imgHeight;
             let position = 0;
 
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
 
             while (heightLeft >= 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
             }
 
             pdf.save(`Cierre_Turno_${fechaStr}_${horaStr}.pdf`);
             
             setTimeout(() => {
-                localStorage.removeItem('planilla_valores');
+                limpiarPlanilla();
                 location.reload();
             }, 1000);
         });

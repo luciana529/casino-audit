@@ -1,4 +1,4 @@
-function extraerYEnviarDatos() {
+function extraerYEnviarDatos(imagenPlanilla = null) {
     const operador = document.getElementById('nombre')?.value || "Sin Nombre";
     const fecha = document.getElementById('fecha')?.value || new Date().toISOString().slice(0, 10);
     const horaInicio = document.getElementById('horaInicio')?.value || '';
@@ -65,6 +65,7 @@ function extraerYEnviarDatos() {
         ingresos: ingresos,
         egresos: egresos,
         total_caja: totalCaja,
+        imagen_planilla: imagenPlanilla,
         estado_planilla: obtenerEstadoPlanilla()
     };
 
@@ -76,7 +77,7 @@ function extraerYEnviarDatos() {
 
     // Enviar por HTTP POST al FastAPI configurado para el entorno actual.
     const controlador = new AbortController();
-    const timeout = setTimeout(() => controlador.abort(), 10000);
+    const timeout = setTimeout(() => controlador.abort(), 60000);
 
     return fetch(`${window.API_BASE_URL || 'http://127.0.0.1:8000/api/v1'}/cierre`, {
         method: "POST",
@@ -87,15 +88,15 @@ function extraerYEnviarDatos() {
         body: JSON.stringify(paqueteAuditoria),
         signal: controlador.signal
     })
-    .then(res => {
+    .then(async res => {
         if (!res.ok) {
-            throw new Error(`La API respondió con HTTP ${res.status}`);
+            const detalle = await res.text();
+            throw new Error(`La API respondió con HTTP ${res.status}: ${detalle}`);
         }
         return res.json();
     })
     .then(data => {
         console.log("Transacción enviada a la API de auditoría:", data);
-        bloquearPlanilla();
         return data;
     })
     .catch(err => {
@@ -106,6 +107,25 @@ function extraerYEnviarDatos() {
     .finally(() => {
         clearTimeout(timeout);
     });
+}
+
+function clavePlanilla() {
+    return `planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`;
+}
+
+function limpiarPlanilla() {
+    localStorage.removeItem(clavePlanilla());
+    localStorage.removeItem('planilla_valores');
+    document.querySelectorAll('input, select, textarea').forEach(element => {
+        element.value = '';
+        element.removeAttribute('readonly');
+        element.removeAttribute('disabled');
+    });
+    document.querySelectorAll('#filasPrincipales tr').forEach(fila => fila.remove());
+    for (let i = 0; i < 15; i++) {
+        if (typeof agregarFilaHTML === 'function') agregarFilaHTML();
+    }
+    asegurarIdsCampos();
 }
 
 function bloquearPlanilla() {
@@ -260,6 +280,11 @@ function asegurarIdsCampos() {
 
 function ajustarAnchoCampo(elemento) {
     if (!(elemento instanceof HTMLInputElement)) return;
+    if (elemento.classList.contains('hora-campo')) {
+        elemento.style.width = '100%';
+        elemento.style.minWidth = '62px';
+        return;
+    }
     const contenido = elemento.value || elemento.placeholder || '';
     const canvas = ajustarAnchoCampo.canvas || (ajustarAnchoCampo.canvas = document.createElement('canvas'));
     const context = canvas.getContext('2d');

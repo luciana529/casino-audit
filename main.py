@@ -34,53 +34,68 @@ CIERRES_LOCALES = []
 ESTADOS_PLANILLA = {}
 
 def get_db():
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+    url = DATABASE_URL
+    if not url:
+        raise RuntimeError("DATABASE_URL no está configurada")
+
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgres://", 1)
+
+    if "railway.internal" in url:
+        return psycopg2.connect(url)
+    return psycopg2.connect(url, sslmode="require")
 
 def init_db():
     if DATABASE_URL:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(100) NOT NULL,
-                nombre VARCHAR(100) NOT NULL,
-                rol VARCHAR(20) NOT NULL DEFAULT 'empleado',
-                requiere_cambio_pass BOOLEAN DEFAULT TRUE
-            );
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cierres (
-                id SERIAL PRIMARY KEY,
-                usuario_id INT REFERENCES usuarios(id),
-                operador VARCHAR(100),
-                fecha VARCHAR(20),
-                hora VARCHAR(20),
-                total_caja NUMERIC,
-                datos_json JSONB,
-                timestamp_servidor TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        cursor.execute("SELECT COUNT(*) FROM usuarios;")
-        cantidad_usuarios = cursor.fetchone()[0]
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
 
-        # Solo crear las cuentas iniciales cuando la tabla todavía está vacía.
-        # Los cambios posteriores de username, password o rol quedan preservados.
-        if cantidad_usuarios == 0:
             cursor.execute("""
-                INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
-                VALUES
-                    ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
-                    ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    password VARCHAR(100) NOT NULL,
+                    nombre VARCHAR(100) NOT NULL,
+                    rol VARCHAR(20) NOT NULL DEFAULT 'empleado',
+                    requiere_cambio_pass BOOLEAN DEFAULT TRUE
+                );
             """)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cierres (
+                    id SERIAL PRIMARY KEY,
+                    usuario_id INT REFERENCES usuarios(id),
+                    operador VARCHAR(100),
+                    fecha VARCHAR(20),
+                    hora VARCHAR(20),
+                    total_caja NUMERIC,
+                    datos_json JSONB,
+                    timestamp_servidor TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_planilla BYTEA;")
+            cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_mime VARCHAR(50);")
+
+            cursor.execute("SELECT COUNT(*) FROM usuarios;")
+            cantidad_usuarios = cursor.fetchone()[0]
+
+            # Solo crear las cuentas iniciales cuando la tabla todavía está vacía.
+            # Los cambios posteriores de username, password o rol quedan preservados.
+            if cantidad_usuarios == 0:
+                cursor.execute("""
+                    INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
+                    VALUES
+                        ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
+                        ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
+                """)
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("--- BASE DE DATOS INICIALIZADA CON ÉXITO ---")
+        except Exception as error:
+            print(f"--- ERROR AL INICIALIZAR LA BASE DE DATOS: {error} ---")
 
 init_db()
 
@@ -210,7 +225,19 @@ class CierreCaja(BaseModel):
     ingresos: List[Dict[str, Any]]
     egresos: List[Dict[str, Any]]
     total_caja: float
+    imagen_planilla: Optional[str] = None
     estado_planilla: Dict[str, str] = {}
+
+def extraer_imagen(data: CierreCaja):
+    if not data.imagen_planilla or "," not in data.imagen_planilla:
+        return None, None
+    mime, contenido = data.imagen_planilla.split(",", 1)
+    if not mime.startswith("data:image/"):
+        return None, None
+    try:
+        return base64.b64decode(contenido, validate=True), mime[5:].split(";", 1)[0]
+    except (ValueError, base64.binascii.Error):
+        raise HTTPException(status_code=400, detail="La imagen de la planilla no es válida")
 
 # --- ENDPOINTS USUARIOS (CRUD) ---
 @app.post("/api/v1/login")
@@ -386,7 +413,10 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     if user["rol"] == "empleado":
         data.usuario_id = user["id"]
         data.operador = user["username"]
-    ESTADOS_PLANILLA[data.usuario_id or user["id"]] = dict(data.estado_planilla)
+    usuario_planilla_id = data.usuario_id or user["id"]
+    imagen_bytes, imagen_mime = extraer_imagen(data)
+    datos_cierre = data.dict()
+    datos_cierre["hora"] = data.hora[:5]
     if not DATABASE_URL:
         nuevo_id = len(CIERRES_LOCALES) + 1
         registro = {
@@ -399,22 +429,23 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
             "hora_inicio": data.hora_inicio,
             "hora_cierre": data.hora_cierre,
             "total_caja": data.total_caja,
-            "datos_json": json.dumps(data.dict()),
+            "datos_json": json.dumps(datos_cierre),
             "timestamp_servidor": "2026-03-27 10:00:00"
         }
         CIERRES_LOCALES.append(registro)
         await manager.broadcast(json.dumps({
             "type": "closure_saved",
             "usuario_id": user["id"],
-            "state": data.estado_planilla
+            "state": {}
         }))
+        ESTADOS_PLANILLA[usuario_planilla_id] = {}
         return {"status": "ok", "mensaje": "Cierre registrado"}
         
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO cierres (usuario_id, operador, fecha, hora, total_caja, datos_json) VALUES (%s, %s, %s, %s, %s, %s)",
-        (data.usuario_id, data.operador, data.fecha, data.hora, data.total_caja, json.dumps(data.dict()))
+        "INSERT INTO cierres (usuario_id, operador, fecha, hora, total_caja, datos_json, imagen_planilla, imagen_mime) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (data.usuario_id, data.operador, data.fecha, data.hora[:5], data.total_caja, json.dumps(datos_cierre), psycopg2.Binary(imagen_bytes) if imagen_bytes else None, imagen_mime)
     )
     conn.commit()
     cursor.close()
@@ -422,8 +453,9 @@ async def registrar_cierre(data: CierreCaja, user: Dict[str, Any] = Depends(curr
     await manager.broadcast(json.dumps({
         "type": "closure_saved",
         "usuario_id": user["id"],
-        "state": data.estado_planilla
+        "state": {}
     }))
+    ESTADOS_PLANILLA[usuario_planilla_id] = {}
     return {"status": "ok", "mensaje": "Cierre registrado"}
 
 @app.get("/api/v1/registros")
@@ -437,14 +469,14 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     if user["rol"] == "admin":
         cursor.execute("""
-            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, encode(c.imagen_planilla, 'base64') as imagen_planilla_base64, c.imagen_mime, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             ORDER BY c.id DESC;
         """)
     else:
         cursor.execute("""
-            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
+            SELECT c.id, c.usuario_id, c.operador, c.fecha, c.hora, c.total_caja, c.datos_json, encode(c.imagen_planilla, 'base64') as imagen_planilla_base64, c.imagen_mime, c.timestamp_servidor::text as timestamp_servidor, u.username, u.nombre as nombre_usuario
             FROM cierres c
             LEFT JOIN usuarios u ON c.usuario_id = u.id
             WHERE c.usuario_id = %s
