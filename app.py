@@ -158,17 +158,20 @@ def mostrar_control_cierres():
         ):
             imagen = datos.get("imagen_planilla") if isinstance(datos, dict) else None
             if imagen and imagen.startswith("data:image/"):
-                _, contenido = imagen.split(",", 1)
-                imagen_bytes = base64.b64decode(contenido)
-                if st.button("🖼️ Ver planilla guardada", key=f"ver_imagen_{cierre_id}"):
-                    st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
-                st.download_button(
-                    "Descargar imagen",
-                    data=imagen_bytes,
-                    file_name=f"planilla_cierre_{cierre_id}.jpg",
-                    mime="image/jpeg",
-                    key=f"descargar_imagen_{cierre_id}"
-                )
+                try:
+                    _, contenido = imagen.split(",", 1)
+                    imagen_bytes = base64.b64decode(contenido, validate=True)
+                    if st.button("🖼️ Ver planilla guardada", key=f"ver_imagen_{cierre_id}"):
+                        st.image(imagen_bytes, caption=f"Planilla del cierre #{cierre_id}", use_container_width=True)
+                    st.download_button(
+                        "Descargar imagen",
+                        data=imagen_bytes,
+                        file_name=f"planilla_cierre_{cierre_id}.jpg",
+                        mime="image/jpeg",
+                        key=f"descargar_imagen_{cierre_id}"
+                    )
+                except (ValueError, base64.binascii.Error):
+                    st.warning("La imagen de este cierre está dañada o incompleta.")
             else:
                 st.info("Este cierre no tiene una imagen guardada.")
 
@@ -340,6 +343,8 @@ elif user["rol"] == "admin":
     # 4. GESTIÓN COMPLETA DE EMPLEADOS (CRUD)
     elif menu == "crud":
         st.subheader("Administración de Personal")
+        if st.session_state.get("crud_message"):
+            st.success(st.session_state.pop("crud_message"))
         
         with st.expander("➕ Crear Empleado"):
             with st.form("form_crear"):
@@ -349,7 +354,7 @@ elif user["rol"] == "admin":
                 if st.form_submit_button("Guardar Empleado"):
                     res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
                     if res.status_code == 200:
-                        st.success("Usuario creado correctamente.")
+                        st.session_state.crud_message = f"✅ Empleado **{u_nom}** creado correctamente."
                         st.rerun()
                     else:
                         st.error(res.json().get("detail", "No se pudo crear el usuario."))
@@ -375,7 +380,7 @@ elif user["rol"] == "admin":
                     if st.button("Actualizar Datos"):
                         res = requests.put(f"{API_URL}/usuarios/{u_sel}", headers=api_headers(), json={"username": mod_user, "nombre": mod_nom, "password": mod_pass if mod_pass else None, "rol": "empleado"})
                         if res.status_code == 200:
-                            st.success("Usuario modificado correctamente.")
+                            st.session_state.crud_message = f"✅ Datos de **{mod_nom}** modificados correctamente."
                             st.rerun()
                         else:
                             st.error(res.json().get("detail", "No se pudo modificar el usuario."))
@@ -389,7 +394,7 @@ elif user["rol"] == "admin":
                     if st.button("🔴 Confirmar Eliminar", type="primary"):
                         res = requests.delete(f"{API_URL}/usuarios/{u_del}", headers=api_headers())
                         if res.status_code == 200:
-                            st.warning("Usuario eliminado.")
+                            st.session_state.crud_message = "✅ Empleado eliminado correctamente."
                             st.rerun()
                         else:
                             st.error(res.json().get("detail", "No se pudo eliminar el usuario."))

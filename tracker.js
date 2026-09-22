@@ -77,7 +77,7 @@ function extraerYEnviarDatos(imagenPlanilla = null) {
 
     // Enviar por HTTP POST al FastAPI configurado para el entorno actual.
     const controlador = new AbortController();
-    const timeout = setTimeout(() => controlador.abort(), 10000);
+    const timeout = setTimeout(() => controlador.abort(), 60000);
 
     return fetch(`${window.API_BASE_URL || 'https://casino-audit-production.up.railway.app/api/v1'}/cierre`, {
         method: "POST",
@@ -88,9 +88,10 @@ function extraerYEnviarDatos(imagenPlanilla = null) {
         body: JSON.stringify(paqueteAuditoria),
         signal: controlador.signal
     })
-    .then(res => {
+    .then(async res => {
         if (!res.ok) {
-            throw new Error(`La API respondió con HTTP ${res.status}`);
+            const detalle = await res.text();
+            throw new Error(`La API respondió con HTTP ${res.status}: ${detalle}`);
         }
         return res.json();
     })

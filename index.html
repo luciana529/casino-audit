@@ -31,16 +31,16 @@
         .tabla-inicio {
             display: table;
             width: 100% !important;
-            min-width: 520px !important;
+            min-width: 0 !important;
             max-width: 100% !important;
             table-layout: fixed;
-            overflow: visible;
+            overflow: hidden;
         }
         .tabla-inicio td,
         .tabla-inicio th {
             min-width: 0 !important;
-            max-width: none;
-            overflow: visible;
+            max-width: 100%;
+            overflow: hidden;
         }
         .tabla-inicio input.editable-der,
         .tabla-inicio input.editable-der-ancho {
@@ -135,14 +135,29 @@
 
         .tabla-inicio input[type="date"],
         .tabla-inicio input[type="time"] {
-            min-width: 150px;
+            min-width: 0;
+            max-width: 100%;
             width: 100%;
-            font-size: 13px;
+            box-sizing: border-box;
+            display: block;
+            padding: 0;
+            font-size: 11px;
+        }
+
+        .tabla-inicio input[type="date"] {
+            min-width: 0;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            padding: 0;
+            font-size: 11px;
         }
 
         .tabla-inicio input#nombre {
-            min-width: 180px;
-            font-size: 13px;
+            min-width: 0;
+            max-width: 100%;
+            font-size: 11px;
         }
 
         @media (max-width: 991.98px) {
@@ -406,8 +421,8 @@
 
     async function guardarYGenerarImagen() {
         const element = document.getElementById('planillaToPrint');
-        const canvas = await html2canvas(element, { scale: 1.5, windowWidth: 1400 });
-        const imgData = canvas.toDataURL('image/jpeg', 0.75);
+        const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.55);
         const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
@@ -430,8 +445,8 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
-        const canvas = await html2canvas(element, { scale: 1.5, windowWidth: 1400 });
-        const imgData = canvas.toDataURL('image/jpeg', 0.75);
+        const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
+        const imgData = canvas.toDataURL('image/jpeg', 0.55);
         const registro = await extraerYEnviarDatos(imgData);
         if (!registro) return;
 
@@ -451,13 +466,13 @@
             let heightLeft = imgHeight;
             let position = 0;
 
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
             heightLeft -= pageHeight;
 
             while (heightLeft >= 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
             }
 
