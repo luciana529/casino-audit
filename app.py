@@ -360,12 +360,17 @@ elif user["rol"] == "admin":
                 u_nom = st.text_input("Nombre Completo")
                 u_pass = st.text_input("Contraseña Inicial", type="password")
                 if st.form_submit_button("Guardar Empleado"):
-                    res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
-                    if res.status_code == 200:
-                        st.session_state.crud_message = f"✅ Empleado **{u_nom}** creado correctamente."
-                        st.rerun()
+                    empleados_res = requests.get(f"{API_URL}/usuarios", headers=api_headers(), timeout=10)
+                    empleados = [usuario for usuario in empleados_res.json() if usuario.get("rol") == "empleado"] if empleados_res.status_code == 200 else []
+                    if len(empleados) >= 23:
+                        st.warning("⚠️ Ya hay 23 empleados registrados. Para agregar más personas, consulta al desarrollador.")
                     else:
-                        st.error(res.json().get("detail", "No se pudo crear el usuario."))
+                        res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
+                        if res.status_code == 200:
+                            st.session_state.crud_message = f"✅ Empleado **{u_nom}** creado correctamente."
+                            st.rerun()
+                        else:
+                            st.error(res.json().get("detail", "No se pudo crear el usuario."))
 
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
