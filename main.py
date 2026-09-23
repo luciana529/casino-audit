@@ -26,6 +26,7 @@ AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-r
 TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
+BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "false").strip().lower() == "true"
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -42,6 +43,8 @@ def limpiar_sesiones_expiradas() -> None:
     return None
 
 def abrir_sesion(user: Dict[str, Any], token: str) -> None:
+    if not BLOQUEAR_SESIONES:
+        return
     if user["id"] in SESIONES_ACTIVAS:
         raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
     SESIONES_ACTIVAS[user["id"]] = {"token": token_id(token), "ultimo_contacto": time.time()}
@@ -175,8 +178,12 @@ def current_user(authorization: Optional[str] = Header(default=None)) -> Dict[st
         raise HTTPException(status_code=401, detail="Autenticación requerida")
     token = authorization[7:].strip()
     user = verify_token(token)
-    if DATABASE_URL:
+    if DATABASE_URL and BLOQUEAR_SESIONES:
         validar_sesion_db(user, token)
+        return user
+    if DATABASE_URL and not BLOQUEAR_SESIONES:
+        return user
+    if not BLOQUEAR_SESIONES:
         return user
     sesion = SESIONES_ACTIVAS.get(user["id"])
     if not sesion or sesion["token"] != token_id(token):
@@ -223,7 +230,7 @@ async def websocket_endpoint(websocket: WebSocket):
         return
     try:
         authenticated_user = verify_token(token)
-        if DATABASE_URL:
+        if DATABASE_URL and BLOQUEAR_SESIONES:
             validar_sesion_db(authenticated_user, token)
     except HTTPException:
         await websocket.close(code=1008)
@@ -245,7 +252,7 @@ async def websocket_endpoint(websocket: WebSocket):
             sesion = SESIONES_ACTIVAS.get(authenticated_user["id"])
             if sesion:
                 sesion["ultimo_contacto"] = time.time()
-            if DATABASE_URL:
+            if DATABASE_URL and BLOQUEAR_SESIONES:
                 validar_sesion_db(authenticated_user, token)
             payload = json.loads(data)
             if payload.get("type") == "presence":
@@ -336,7 +343,8 @@ def login(data: LoginRequest):
 
         user_data = dict(user)
         token = create_token(user_data)
-        reservar_sesion_db(cursor, user_data["id"], token)
+        if BLOQUEAR_SESIONES:
+            reservar_sesion_db(cursor, user_data["id"], token)
         conn.commit()
         return {"status": "ok", "user": user_data, "token": token}
     except Exception:
