@@ -504,10 +504,17 @@ def eliminar_usuario(user_id: int, admin: Dict[str, Any] = Depends(admin_user)):
     if target[0] != "empleado":
         cursor.close()
         raise HTTPException(status_code=403, detail="Los administradores son fijos")
-    cursor.execute("DELETE FROM usuarios WHERE id = %s;", (user_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        # Conservar los cierres históricos, pero permitir eliminar la cuenta.
+        cursor.execute("UPDATE cierres SET usuario_id = NULL WHERE usuario_id = %s;", (user_id,))
+        cursor.execute("DELETE FROM usuarios WHERE id = %s;", (user_id,))
+        conn.commit()
+    except psycopg2.Error:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail="No se pudo eliminar el empleado. Sus cierres históricos fueron preservados.")
+    finally:
+        cursor.close()
+        conn.close()
     return {"status": "ok", "mensaje": "Usuario eliminado"}
 
 # --- ENDPOINTS CIERRES ---

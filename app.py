@@ -425,7 +425,8 @@ elif user["rol"] == "admin":
                     if st.button("🔴 Confirmar Eliminar", type="primary"):
                         res = requests.delete(f"{API_URL}/usuarios/{u_del}", headers=api_headers())
                         if res.status_code == 200:
-                            st.session_state.crud_message = "✅ Empleado eliminado correctamente."
+                            nombre_eliminado = next((u["nombre"] for u in usuarios_eliminables if u["id"] == u_del), "Empleado")
+                            st.session_state.crud_message = f"✅ Empleado **{nombre_eliminado}** eliminado correctamente. Sus cierres históricos fueron conservados."
                             st.rerun()
                         else:
                             st.error(res.json().get("detail", "No se pudo eliminar el usuario."))
