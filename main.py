@@ -144,7 +144,14 @@ def verify_token(token: str) -> Dict[str, Any]:
 def current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Autenticación requerida")
-    return verify_token(authorization[7:].strip())
+    token = authorization[7:].strip()
+    user = verify_token(token)
+    limpiar_sesiones_expiradas()
+    sesion = SESIONES_ACTIVAS.get(user["id"])
+    if not sesion or sesion["token"] != token_id(token):
+        raise HTTPException(status_code=401, detail="Sesión cerrada o reemplazada")
+    sesion["ultimo_contacto"] = time.time()
+    return user
 
 def admin_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     if user.get("rol") != "admin":
@@ -214,9 +221,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     ESTADOS_PLANILLA.setdefault(authenticated_user["id"], {})[payload["element_id"]] = payload["value"]
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
-        sesion = SESIONES_ACTIVAS.get(authenticated_user["id"])
-        if sesion and sesion["token"] == token_id(token):
-            SESIONES_ACTIVAS.pop(authenticated_user["id"], None)
         manager.disconnect(websocket)
 
 # Models
