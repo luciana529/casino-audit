@@ -285,9 +285,9 @@ function asegurarIdsCampos() {
 
 function ajustarAnchoCampo(elemento) {
     if (!(elemento instanceof HTMLInputElement)) return;
-    if (elemento.classList.contains('hora-campo')) {
+    if (elemento.classList.contains('hora-campo') || elemento.classList.contains('fecha-campo')) {
         elemento.style.width = '100%';
-        elemento.style.minWidth = '62px';
+        elemento.style.minWidth = elemento.classList.contains('fecha-campo') ? '126px' : '62px';
         return;
     }
     const contenido = elemento.value || elemento.placeholder || '';

@@ -210,12 +210,19 @@ def login(username, password):
             st.session_state.user = response["user"]
             st.session_state.api_token = response["token"]
             st.rerun()
+        elif res.status_code == 409:
+            st.error(res.json().get("detail", "Este usuario ya tiene una sesión abierta en otro dispositivo."))
         else:
             st.error("Credenciales incorrectas.")
     except Exception as e:
         st.error(f"Error conectando a la API: {e}")
 
 def logout():
+    if st.session_state.api_token:
+        try:
+            requests.post(f"{API_URL}/logout", headers=api_headers(), timeout=5)
+        except requests.RequestException:
+            pass
     st.session_state.user = None
     st.session_state.api_token = None
     st.rerun()
