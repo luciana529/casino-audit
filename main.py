@@ -121,13 +121,6 @@ def init_db():
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_token_hash VARCHAR(64);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_ultimo_contacto TIMESTAMP;")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_activa BOOLEAN NOT NULL DEFAULT FALSE;")
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS sesiones_activas (
-                    usuario_id INT PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-                    token_hash VARCHAR(64) NOT NULL,
-                    ultimo_contacto TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
 
             cursor.execute("SELECT COUNT(*) FROM usuarios;")
             cantidad_usuarios = cursor.fetchone()[0]
