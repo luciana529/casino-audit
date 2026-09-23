@@ -57,20 +57,34 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT sesion_token_hash
-            FROM usuarios
-            WHERE id = %s
-              AND sesion_token_hash = %s
-              AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '8 hours'
+            SELECT token_hash
+            FROM sesiones_activas
+            WHERE usuario_id = %s
+              AND token_hash = %s
+              AND ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '8 hours'
             FOR UPDATE;
         """, (user["id"], token_id(token)))
         if not cursor.fetchone():
             raise HTTPException(status_code=401, detail="Sesión cerrada o abierta en otro dispositivo")
-        cursor.execute("UPDATE usuarios SET sesion_ultimo_contacto = CURRENT_TIMESTAMP WHERE id = %s;", (user["id"],))
+        cursor.execute("UPDATE sesiones_activas SET ultimo_contacto = CURRENT_TIMESTAMP WHERE usuario_id = %s;", (user["id"],))
         conn.commit()
     finally:
         cursor.close()
         conn.close()
+
+def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
+    cursor.execute("""
+        DELETE FROM sesiones_activas
+        WHERE usuario_id = %s
+          AND ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '8 hours';
+    """, (user_id,))
+    cursor.execute("""
+        INSERT INTO sesiones_activas (usuario_id, token_hash, ultimo_contacto)
+        VALUES (%s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (usuario_id) DO NOTHING;
+    """, (user_id, token_id(token)))
+    if cursor.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
 
 def get_db():
     url = DATABASE_URL
@@ -117,6 +131,13 @@ def init_db():
             cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_mime VARCHAR(50);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_token_hash VARCHAR(64);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_ultimo_contacto TIMESTAMP;")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sesiones_activas (
+                    usuario_id INT PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+                    token_hash VARCHAR(64) NOT NULL,
+                    ultimo_contacto TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
 
             cursor.execute("SELECT COUNT(*) FROM usuarios;")
             cantidad_usuarios = cursor.fetchone()[0]
@@ -320,8 +341,7 @@ def login(data: LoginRequest):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cursor.execute("""
-            SELECT id, username, nombre, rol, requiere_cambio_pass,
-                   sesion_token_hash, sesion_ultimo_contacto
+            SELECT id, username, nombre, rol, requiere_cambio_pass
             FROM usuarios
             WHERE TRIM(username) = %s AND TRIM(password) = %s
             FOR UPDATE;
@@ -330,22 +350,9 @@ def login(data: LoginRequest):
         if not user:
             raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
-        if user["sesion_token_hash"] and user["sesion_ultimo_contacto"]:
-            cursor.execute("""
-                SELECT CURRENT_TIMESTAMP - %s < INTERVAL '8 hours';
-            """, (user["sesion_ultimo_contacto"],))
-            if cursor.fetchone()[0]:
-                raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
-
         user_data = dict(user)
-        user_data.pop("sesion_token_hash", None)
-        user_data.pop("sesion_ultimo_contacto", None)
         token = create_token(user_data)
-        cursor.execute("""
-            UPDATE usuarios
-            SET sesion_token_hash = %s, sesion_ultimo_contacto = CURRENT_TIMESTAMP
-            WHERE id = %s;
-        """, (token_id(token), user_data["id"]))
+        reservar_sesion_db(cursor, user_data["id"], token)
         conn.commit()
         return {"status": "ok", "user": user_data, "token": token}
     except Exception:
@@ -361,7 +368,7 @@ def logout(user: Dict[str, Any] = Depends(current_user)):
     if DATABASE_URL:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE usuarios SET sesion_token_hash = NULL, sesion_ultimo_contacto = NULL WHERE id = %s;", (user["id"],))
+        cursor.execute("DELETE FROM sesiones_activas WHERE usuario_id = %s;", (user["id"],))
         conn.commit()
         cursor.close()
         conn.close()
