@@ -145,9 +145,9 @@
         input.editable-der-ancho:focus { background: #e8f0fe; }
         input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
 
-        .tabla-inicio input[type="date"],
+        .tabla-inicio input[type="date"].fecha-campo,
         .tabla-inicio input[type="text"].hora-campo {
-            min-width: 0;
+            min-width: 126px;
             max-width: 100%;
             width: 100%;
             box-sizing: border-box;
@@ -163,6 +163,15 @@
             min-width: 0;
             max-width: 100%;
             font-size: 11px;
+        }
+
+        @media (max-width: 576px) {
+            .tabla-inicio input[type="date"].fecha-campo {
+                min-width: 126px;
+                width: 100% !important;
+                font-size: 11px;
+                padding: 0;
+            }
         }
 
         @media (max-width: 991.98px) {
@@ -222,7 +231,7 @@
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
             <table class="mb-2 tabla-derecha tabla-inicio">
-                <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der fecha-campo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
                 <tr>
                     <td class="excel-blue" style="width: 20%;">INICIO</td>

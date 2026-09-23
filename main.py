@@ -25,6 +25,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-render")
 TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
+SESION_INACTIVA_SEGUNDOS = 90
+SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -33,6 +35,21 @@ USUARIOS_LOCALES = [
 
 CIERRES_LOCALES = []
 ESTADOS_PLANILLA = {}
+
+def token_id(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def limpiar_sesiones_expiradas() -> None:
+    ahora = time.time()
+    for usuario_id, sesion in list(SESIONES_ACTIVAS.items()):
+        if ahora - sesion["ultimo_contacto"] > SESION_INACTIVA_SEGUNDOS:
+            SESIONES_ACTIVAS.pop(usuario_id, None)
+
+def abrir_sesion(user: Dict[str, Any], token: str) -> None:
+    limpiar_sesiones_expiradas()
+    if user["id"] in SESIONES_ACTIVAS:
+        raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
+    SESIONES_ACTIVAS[user["id"]] = {"token": token_id(token), "ultimo_contacto": time.time()}
 
 def get_db():
     url = DATABASE_URL
@@ -173,6 +190,9 @@ async def websocket_endpoint(websocket: WebSocket):
         return
         
     await manager.connect(websocket)
+    sesion = SESIONES_ACTIVAS.get(authenticated_user["id"])
+    if sesion:
+        sesion["ultimo_contacto"] = time.time()
     manager.connection_users[websocket] = {
         "usuario_id": authenticated_user["id"],
         "nombre": authenticated_user["username"],
@@ -182,6 +202,9 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            sesion = SESIONES_ACTIVAS.get(authenticated_user["id"])
+            if sesion:
+                sesion["ultimo_contacto"] = time.time()
             payload = json.loads(data)
             if payload.get("type") == "presence":
                 continue
@@ -191,6 +214,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     ESTADOS_PLANILLA.setdefault(authenticated_user["id"], {})[payload["element_id"]] = payload["value"]
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
+        sesion = SESIONES_ACTIVAS.get(authenticated_user["id"])
+        if sesion and sesion["token"] == token_id(token):
+            SESIONES_ACTIVAS.pop(authenticated_user["id"], None)
         manager.disconnect(websocket)
 
 # Models
@@ -251,7 +277,9 @@ def login(data: LoginRequest):
             if u["username"] == user_clean and u["password"] == pass_clean:
                 user_data = u.copy()
                 del user_data["password"]
-                return {"status": "ok", "user": user_data, "token": create_token(user_data)}
+                token = create_token(user_data)
+                abrir_sesion(user_data, token)
+                return {"status": "ok", "user": user_data, "token": token}
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
     conn = get_db()
@@ -267,7 +295,14 @@ def login(data: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
     user_data = dict(user)
-    return {"status": "ok", "user": user_data, "token": create_token(user_data)}
+    token = create_token(user_data)
+    abrir_sesion(user_data, token)
+    return {"status": "ok", "user": user_data, "token": token}
+
+@app.post("/api/v1/logout")
+def logout(user: Dict[str, Any] = Depends(current_user)):
+    SESIONES_ACTIVAS.pop(user["id"], None)
+    return {"status": "ok", "mensaje": "Sesión cerrada"}
 
 @app.post("/api/v1/cambiar-credenciales")
 def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] = Depends(current_user)):
