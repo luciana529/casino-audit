@@ -157,7 +157,9 @@ def init_db():
             conn.close()
             print("--- BASE DE DATOS INICIALIZADA CON ÉXITO ---")
         except Exception as error:
+            conn.rollback()
             print(f"--- ERROR AL INICIALIZAR LA BASE DE DATOS: {error} ---")
+            raise
 
 init_db()
 
@@ -602,6 +604,21 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
 
 @app.get("/api/v1/presencia")
 def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
+    if DATABASE_URL:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("""
+            SELECT u.id AS usuario_id, u.nombre, u.username, u.rol
+            FROM sesiones_activas s
+            JOIN usuarios u ON u.id = s.usuario_id
+            WHERE s.ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '8 hours'
+            ORDER BY u.nombre;
+        """)
+        sesiones = [dict(fila) for fila in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return sesiones
+
     usuarios = {}
     for usuario in manager.connection_users.values():
         clave = usuario.get("usuario_id") or f"anonimo-{id(usuario)}"
