@@ -24,9 +24,7 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-render")
 TOKEN_TTL_SECONDS = 8 * 60 * 60
-SESION_INACTIVA_SEGUNDOS = TOKEN_TTL_SECONDS
 MAX_EMPLEADOS = 23
-SESION_INACTIVA_SEGUNDOS = 90
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
 
 USUARIOS_LOCALES = [
@@ -41,13 +39,9 @@ def token_id(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 def limpiar_sesiones_expiradas() -> None:
-    ahora = time.time()
-    for usuario_id, sesion in list(SESIONES_ACTIVAS.items()):
-        if ahora - sesion["ultimo_contacto"] > SESION_INACTIVA_SEGUNDOS:
-            SESIONES_ACTIVAS.pop(usuario_id, None)
+    return None
 
 def abrir_sesion(user: Dict[str, Any], token: str) -> None:
-    limpiar_sesiones_expiradas()
     if user["id"] in SESIONES_ACTIVAS:
         raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
     SESIONES_ACTIVAS[user["id"]] = {"token": token_id(token), "ultimo_contacto": time.time()}
@@ -57,16 +51,14 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT token_hash
-            FROM sesiones_activas
-            WHERE usuario_id = %s
-              AND token_hash = %s
-              AND ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '8 hours'
+            SELECT sesion_activa
+            FROM usuarios
+            WHERE id = %s AND sesion_activa = TRUE AND sesion_token_hash = %s
             FOR UPDATE;
         """, (user["id"], token_id(token)))
         if not cursor.fetchone():
             raise HTTPException(status_code=401, detail="Sesión cerrada o abierta en otro dispositivo")
-        cursor.execute("UPDATE sesiones_activas SET ultimo_contacto = CURRENT_TIMESTAMP WHERE usuario_id = %s;", (user["id"],))
+        cursor.execute("UPDATE usuarios SET sesion_ultimo_contacto = CURRENT_TIMESTAMP WHERE id = %s;", (user["id"],))
         conn.commit()
     finally:
         cursor.close()
@@ -74,15 +66,12 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
 
 def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
     cursor.execute("""
-        DELETE FROM sesiones_activas
-        WHERE usuario_id = %s
-          AND ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '8 hours';
-    """, (user_id,))
-    cursor.execute("""
-        INSERT INTO sesiones_activas (usuario_id, token_hash, ultimo_contacto)
-        VALUES (%s, %s, CURRENT_TIMESTAMP)
-        ON CONFLICT (usuario_id) DO NOTHING;
-    """, (user_id, token_id(token)))
+        UPDATE usuarios
+        SET sesion_activa = TRUE,
+            sesion_token_hash = %s,
+            sesion_ultimo_contacto = CURRENT_TIMESTAMP
+        WHERE id = %s AND sesion_activa = FALSE;
+    """, (token_id(token), user_id))
     if cursor.rowcount != 1:
         raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
 
@@ -131,6 +120,7 @@ def init_db():
             cursor.execute("ALTER TABLE cierres ADD COLUMN IF NOT EXISTS imagen_mime VARCHAR(50);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_token_hash VARCHAR(64);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_ultimo_contacto TIMESTAMP;")
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_activa BOOLEAN NOT NULL DEFAULT FALSE;")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sesiones_activas (
                     usuario_id INT PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -195,7 +185,6 @@ def current_user(authorization: Optional[str] = Header(default=None)) -> Dict[st
     if DATABASE_URL:
         validar_sesion_db(user, token)
         return user
-    limpiar_sesiones_expiradas()
     sesion = SESIONES_ACTIVAS.get(user["id"])
     if not sesion or sesion["token"] != token_id(token):
         raise HTTPException(status_code=401, detail="Sesión cerrada o reemplazada")
@@ -370,7 +359,13 @@ def logout(user: Dict[str, Any] = Depends(current_user)):
     if DATABASE_URL:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM sesiones_activas WHERE usuario_id = %s;", (user["id"],))
+        cursor.execute("""
+            UPDATE usuarios
+            SET sesion_activa = FALSE,
+                sesion_token_hash = NULL,
+                sesion_ultimo_contacto = NULL
+            WHERE id = %s;
+        """, (user["id"],))
         conn.commit()
         cursor.close()
         conn.close()
@@ -608,11 +603,10 @@ def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("""
-            SELECT u.id AS usuario_id, u.nombre, u.username, u.rol
-            FROM sesiones_activas s
-            JOIN usuarios u ON u.id = s.usuario_id
-            WHERE s.ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '8 hours'
-            ORDER BY u.nombre;
+            SELECT id AS usuario_id, nombre, username, rol
+            FROM usuarios
+            WHERE sesion_activa = TRUE
+            ORDER BY nombre;
         """)
         sesiones = [dict(fila) for fila in cursor.fetchall()]
         cursor.close()
