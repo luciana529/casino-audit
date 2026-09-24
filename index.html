@@ -205,6 +205,32 @@
             box-sizing: border-box;
         }
 
+        .tabla-inicio-scroll {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+        }
+
+        .tabla-inicio-scroll .tabla-inicio-detalle {
+            width: 860px !important;
+            min-width: 860px !important;
+            max-width: none !important;
+            table-layout: fixed;
+        }
+
+        .tabla-inicio-scroll .tabla-inicio-detalle td,
+        .tabla-inicio-scroll .tabla-inicio-detalle th {
+            min-width: 120px !important;
+            max-width: none;
+            overflow: visible;
+        }
+
+        .tabla-inicio-scroll .tabla-inicio-detalle td:first-child {
+            min-width: 170px !important;
+        }
+
         @media (max-width: 576px) {
             .tabla-inicio input[type="date"].fecha-campo {
                 min-width: 126px;
@@ -282,7 +308,8 @@
             </table>
 
             <!-- 2. INICIO -->
-            <table class="mb-2 tabla-derecha">
+            <div class="tabla-inicio-scroll">
+            <table class="mb-2 tabla-derecha tabla-inicio-detalle">
                 <tr class="excel-blue"><td colspan="5">INICIO</td></tr>
                 <tr class="excel-blue">
                     <td style="width: 15%;">BV</td>
@@ -334,6 +361,7 @@
                     <td><input type="text" id="inicio-respaldo-total-fichas" class="editable-der-ancho" value="" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td>
                 </tr>
             </table>
+            </div>
 
             <!-- 4. CIERRE -->
             <table class="mb-2 tabla-derecha">
