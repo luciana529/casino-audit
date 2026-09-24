@@ -409,7 +409,7 @@ elif user["rol"] == "admin":
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
             lista_u = res_u.json()
-            st.dataframe(pd.DataFrame(lista_u)[["id", "username", "nombre", "rol", "requiere_cambio_pass"]], use_container_width=True)
+            st.dataframe(pd.DataFrame(lista_u)[["username", "nombre", "rol", "requiere_cambio_pass"]], use_container_width=True)
             
             st.markdown("---")
             col_mod, col_eli = st.columns(2)
