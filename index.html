@@ -433,6 +433,7 @@
         }
         asegurarIdsCampos();
         guardarTemporal();
+        transmitirCantidadFilas();
     }
 
     function bloquearCasilla(input) {
@@ -452,6 +453,17 @@
             if (input.id) estado.campos[input.id] = input.value;
         });
         localStorage.setItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`, JSON.stringify(estado));
+    }
+
+    function transmitirCantidadFilas() {
+        const cantidad = document.querySelectorAll('#filasPrincipales tr').length;
+        const cambio = { type: 'cell_update', usuario_id: window.CASINO_USER_ID ?? null, element_id: '__filas', value: cantidad };
+        if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
+            window.wsTiempoReal.send(JSON.stringify(cambio));
+        } else {
+            window.cambiosPendientes = window.cambiosPendientes || {};
+            window.cambiosPendientes.__filas = cantidad;
+        }
     }
 
     function cargarTemporal() {
@@ -491,7 +503,7 @@
         const element = document.getElementById('planillaToPrint');
         try {
             const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
-            return canvas.toDataURL('image/jpeg', 0.55);
+            return { canvas, imgData: canvas.toDataURL('image/jpeg', 0.55) };
         } catch (error) {
             console.error('No se pudo capturar la planilla:', error);
             alert('No se pudo capturar la imagen de la planilla. El cierre no se guardó.');
@@ -502,9 +514,9 @@
     async function guardarYGenerarImagen() {
         actualizarHoraCierre();
         if (!validarHoras()) return;
-        const imgData = await capturarImagenPlanilla();
-        if (!imgData) return;
-        const registro = await extraerYEnviarDatos(imgData);
+        const captura = await capturarImagenPlanilla();
+        if (!captura) return;
+        const registro = await extraerYEnviarDatos(captura.imgData);
         if (!registro) return;
 
         const ahora = new Date();
@@ -516,7 +528,7 @@
         Promise.resolve().then(() => {
             const link = document.createElement('a');
             link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
-            link.href = imgData;
+            link.href = captura.imgData;
             link.click();
             
             limpiarPlanilla();
@@ -528,9 +540,9 @@
         const element = document.getElementById('planillaToPrint');
         actualizarHoraCierre();
         if (!validarHoras()) return;
-        const imgData = await capturarImagenPlanilla();
-        if (!imgData) return;
-        const registro = await extraerYEnviarDatos(imgData);
+        const captura = await capturarImagenPlanilla();
+        if (!captura) return;
+        const registro = await extraerYEnviarDatos(captura.imgData);
         if (!registro) return;
 
         const ahora = new Date();
@@ -545,18 +557,21 @@
             const pdf = new jsPDF('l', 'mm', 'a4');
             const imgWidth = 297; 
             const pageHeight = 210; 
-            const imgHeight = (element.clientHeight * imgWidth) / element.clientWidth;
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft >= 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
+            const canvas = captura.canvas;
+            const pixelesPorPagina = Math.floor((canvas.width * pageHeight) / imgWidth);
+            for (let inicio = 0; inicio < canvas.height; inicio += pixelesPorPagina) {
+                const alto = Math.min(pixelesPorPagina, canvas.height - inicio);
+                const paginaCanvas = document.createElement('canvas');
+                paginaCanvas.width = canvas.width;
+                paginaCanvas.height = alto;
+                paginaCanvas.getContext('2d').drawImage(
+                    canvas, 0, inicio, canvas.width, alto,
+                    0, 0, canvas.width, alto
+                );
+                if (inicio > 0) pdf.addPage();
+                const paginaData = paginaCanvas.toDataURL('image/jpeg', 0.85);
+                const paginaAlto = (alto * imgWidth) / canvas.width;
+                pdf.addImage(paginaData, 'JPEG', 0, 0, imgWidth, paginaAlto);
             }
 
             pdf.save(`Cierre_Turno_${fechaStr}_${horaStr}.pdf`);

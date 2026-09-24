@@ -145,7 +145,7 @@ function bloquearPlanilla() {
 
 function obtenerEstadoPlanilla() {
     asegurarIdsCampos();
-    const state = {};
+    const state = { __filas: document.querySelectorAll('#filasPrincipales tr').length };
     document.querySelectorAll('input, select, textarea').forEach(element => {
         if (element.id) state[element.id] = element.value;
     });
@@ -154,6 +154,7 @@ function obtenerEstadoPlanilla() {
 
 function aplicarEstadoPlanilla(state) {
     if (!state) return;
+    if (state.__filas) asegurarCantidadFilas(Number(state.__filas));
     localStorage.removeItem('planilla_valores');
     document.querySelectorAll('input, select, textarea').forEach(element => {
         element.value = '';
@@ -163,6 +164,12 @@ function aplicarEstadoPlanilla(state) {
         if (element) element.value = value;
     });
     guardarTemporal();
+}
+
+function asegurarCantidadFilas(cantidad) {
+    const tbody = document.getElementById('filasPrincipales');
+    if (!tbody) return;
+    while (tbody.rows.length < cantidad) agregarFilaHTML();
 }
 
 function iniciarSincronizacionForzada() {
@@ -212,6 +219,10 @@ function conectarTiempoReal(wsUrl) {
                 Number(data.usuario_id) !== Number(window.WATCH_USER_ID)
             ) return;
             const element = document.getElementById(data.element_id);
+            if (data.element_id === '__filas') {
+                asegurarCantidadFilas(Number(data.value));
+                return;
+            }
             if (element && data.value !== undefined) {
                 element.value = data.value;
                 guardarTemporal();

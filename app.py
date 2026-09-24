@@ -137,14 +137,17 @@ def mostrar_control_cierres():
         st.info("No hay cierres registrados todavía.")
         return
 
-    filas = pd.DataFrame(cierres)
-    columnas = [
-        columna for columna in [
-            "id", "nombre_usuario", "operador", "fecha", "hora",
-            "total_caja"
-        ] if columna in filas.columns
-    ]
-    st.dataframe(filas[columnas], hide_index=True, use_container_width=True)
+    if "cierres_ocultos" not in st.session_state:
+        st.session_state.cierres_ocultos = set()
+    cierres = [cierre for cierre in cierres if cierre.get("id") not in st.session_state.cierres_ocultos]
+    if not cierres:
+        st.info("No hay cierres visibles para este administrador.")
+        return
+
+    if st.button("🧹 Limpiar cierres visibles", type="secondary", key="limpiar_cierres_visibles"):
+        st.session_state.cierres_ocultos.update(cierre.get("id") for cierre in cierres)
+        st.success("✅ Planillas ocultadas para este administrador. La base de datos no fue modificada.")
+        st.rerun()
 
     cierres_por_fecha = {}
     for cierre in cierres:
@@ -154,13 +157,6 @@ def mostrar_control_cierres():
     for fecha, cierres_dia in sorted(cierres_por_fecha.items(), reverse=True):
         total_dia = sum(float(cierre.get("total_caja") or 0) for cierre in cierres_dia)
         with st.expander(f"📅 {fecha} | {len(cierres_dia)} cierres | Total: ${total_dia:,.2f}", expanded=fecha == max(cierres_por_fecha)):
-            filas_dia = pd.DataFrame(cierres_dia)
-            columnas_dia = [
-                columna for columna in ["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]
-                if columna in filas_dia.columns
-            ]
-            st.dataframe(filas_dia[columnas_dia], hide_index=True, use_container_width=True)
-
             for cierre in cierres_dia:
                 cierre_id = cierre.get("id")
                 datos = cierre.get("datos_json", {})
@@ -373,7 +369,8 @@ elif user["rol"] == "admin":
             st.success(st.session_state.pop("crud_message"))
         
         with st.expander("➕ Crear Empleado"):
-            with st.form("form_crear"):
+            version_formulario = st.session_state.get("version_formulario_empleado", 0)
+            with st.form(f"form_crear_{version_formulario}"):
                 u_user = st.text_input("Usuario")
                 u_nom = st.text_input("Nombre Completo")
                 u_pass = st.text_input("Contraseña Inicial", type="password")
@@ -385,6 +382,7 @@ elif user["rol"] == "admin":
                     else:
                         res = requests.post(f"{API_URL}/usuarios", headers=api_headers(), json={"username": u_user, "nombre": u_nom, "password": u_pass, "rol": "empleado"})
                         if res.status_code == 200:
+                            st.session_state.version_formulario_empleado = version_formulario + 1
                             st.session_state.crud_message = f"✅ Empleado **{u_nom}** creado correctamente."
                             st.rerun()
                         else:
