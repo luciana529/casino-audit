@@ -7,6 +7,7 @@ import base64
 import os
 import altair as alt
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -96,7 +97,7 @@ def mostrar_usuarios_conectados():
 
 @st.fragment(run_every="5s")
 def mostrar_dashboard():
-    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+    fecha_hoy = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).strftime("%Y-%m-%d")
     st.subheader(f"Métricas del día: {fecha_hoy}")
     try:
         res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
