@@ -8,7 +8,7 @@ import os
 BASE_URL = os.getenv("BOT_API_URL", "https://casino-audit-production.up.railway.app").rstrip("/")
 WS_URL = os.getenv("BOT_WS_URL", "wss://casino-audit-production.up.railway.app/ws/live")
 BOT_PASSWORD = os.getenv("BOT_PASSWORD", "12345")
-BOT_COUNT = int(os.getenv("BOT_COUNT", "20"))
+BOT_COUNT = int(os.getenv("BOT_COUNT", "21"))
 
 async def ejecutar_bot(user_id):
     username = f"operador{user_id}"
