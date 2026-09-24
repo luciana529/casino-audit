@@ -89,6 +89,7 @@
             font-family: monospace;
             letter-spacing: 0;
             user-select: none;
+        }
 
         @media (max-width: 576px) {
             .tabla-inicio input[type="text"].hora-campo {
@@ -97,7 +98,6 @@
                 font-size: 11px;
                 padding: 0;
             }
-        }
         }
         
         /* Inputs generales (izquierda) */
@@ -156,6 +156,49 @@
         }
         input.editable-der-ancho:focus { background: #e8f0fe; }
         input.editable-der-ancho[readonly] { background-color: #f1f3f4; color: #3c4043; cursor: not-allowed; }
+
+        /* Campos uniformes y visibles para escritura en cualquier dispositivo. */
+        .sheet-container input.editable,
+        .sheet-container input.editable-texto-largo,
+        .sheet-container input.editable-der,
+        .sheet-container input.editable-der-ancho {
+            background-color: #f7fbff;
+            border: 1px solid #b7c9dc;
+            border-radius: 3px;
+            box-sizing: border-box;
+            color: #1f2937;
+            height: 26px;
+            line-height: 24px;
+            margin: 0 auto;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .sheet-container .input-group-peso {
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sheet-container .input-group-peso input {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .sheet-container input.editable:focus,
+        .sheet-container input.editable-texto-largo:focus,
+        .sheet-container input.editable-der:focus,
+        .sheet-container input.editable-der-ancho:focus {
+            background-color: #eaf4ff;
+            border-color: #5b9bd5;
+            box-shadow: 0 0 0 1px rgba(91, 155, 213, 0.25);
+            outline: none;
+        }
+
+        .sheet-container input[readonly],
+        .sheet-container input[disabled] {
+            background-color: #eef2f6;
+            border-color: #cbd5df;
+        }
 
         .tabla-inicio input[type="date"].fecha-campo,
         .tabla-inicio input[type="text"].hora-campo {
