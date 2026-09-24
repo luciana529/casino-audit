@@ -612,16 +612,22 @@
 
         Promise.resolve().then(() => {
             captura.canvas.toBlob(blob => {
-                if (!blob) return;
+                if (!blob) {
+                    alert('No se pudo preparar la imagen para descargar.');
+                    return;
+                }
                 const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
                 link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
-                link.href = URL.createObjectURL(blob);
+                link.href = url;
+                link.style.display = 'none';
+                document.body.appendChild(link);
                 link.click();
-                URL.revokeObjectURL(link.href);
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                limpiarPlanilla();
+                setTimeout(() => location.reload(), 300);
             }, 'image/jpeg', 0.7);
-            
-            limpiarPlanilla();
-            location.reload();
         });
     }
 
