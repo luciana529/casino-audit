@@ -556,48 +556,44 @@
 
     async function capturarImagenPlanilla() {
         const element = document.getElementById('planillaToPrint');
-        const contenedores = [
-            element,
-            ...element.querySelectorAll('.table-responsive, .bloque-derecha, .tabla-inicio-scroll')
-        ];
-        const tablas = [...element.querySelectorAll('table')];
-        const estilosContenedores = contenedores.map(item => item.getAttribute('style'));
-        const estilosTablas = tablas.map(item => item.getAttribute('style'));
         try {
-            element.style.width = 'max-content';
-            element.style.maxWidth = 'none';
-            contenedores.slice(1).forEach(contenedor => {
-                contenedor.style.width = 'max-content';
-                contenedor.style.maxWidth = 'none';
-                contenedor.style.overflow = 'visible';
-            });
-            tablas.forEach(tabla => {
-                tabla.style.width = 'max-content';
-                tabla.style.maxWidth = 'none';
-            });
-            const anchoCompleto = Math.max(element.scrollWidth, element.offsetWidth);
-            const altoCompleto = Math.max(element.scrollHeight, element.offsetHeight);
             const canvas = await html2canvas(element, {
                 scale: 1,
-                width: anchoCompleto,
-                height: altoCompleto,
-                windowWidth: Math.max(window.innerWidth, anchoCompleto),
-                windowHeight: Math.max(window.innerHeight, altoCompleto)
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                windowWidth: 1680,
+                onclone: documento => {
+                    const planilla = documento.getElementById('planillaToPrint');
+                    if (!planilla) return;
+                    planilla.style.width = '1600px';
+                    planilla.style.maxWidth = '1600px';
+                    planilla.style.height = 'auto';
+                    planilla.style.overflow = 'visible';
+                    planilla.querySelector('.sheet-container > .row')?.style.setProperty('display', 'block');
+                    planilla.querySelectorAll('.col-lg-8, .col-lg-4').forEach(columna => {
+                        columna.style.width = '100%';
+                        columna.style.maxWidth = '100%';
+                        columna.style.flex = 'none';
+                    });
+                    planilla.querySelectorAll('.table-responsive, .bloque-derecha, .tabla-inicio-scroll').forEach(contenedor => {
+                        contenedor.style.width = '100%';
+                        contenedor.style.maxWidth = '100%';
+                        contenedor.style.overflow = 'visible';
+                    });
+                    planilla.querySelectorAll('table').forEach(tabla => {
+                        tabla.style.width = '100%';
+                        tabla.style.maxWidth = '100%';
+                        tabla.style.minWidth = '0';
+                    });
+                }
             });
-            return { canvas, imgData: canvas.toDataURL('image/jpeg', 0.55) };
+            const imgData = canvas.toDataURL('image/jpeg', 0.7);
+            if (!imgData.startsWith('data:image/jpeg')) throw new Error('La captura no generó una imagen válida.');
+            return { canvas, imgData };
         } catch (error) {
             console.error('No se pudo capturar la planilla:', error);
             alert('No se pudo capturar la imagen de la planilla. El cierre no se guardó.');
             return null;
-        } finally {
-            contenedores.forEach((item, index) => {
-                if (estilosContenedores[index] === null) item.removeAttribute('style');
-                else item.setAttribute('style', estilosContenedores[index]);
-            });
-            tablas.forEach((item, index) => {
-                if (estilosTablas[index] === null) item.removeAttribute('style');
-                else item.setAttribute('style', estilosTablas[index]);
-            });
         }
     }
 
@@ -615,10 +611,14 @@
                         String(ahora.getSeconds()).padStart(2, '0');
 
         Promise.resolve().then(() => {
-            const link = document.createElement('a');
-            link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
-            link.href = captura.imgData;
-            link.click();
+            captura.canvas.toBlob(blob => {
+                if (!blob) return;
+                const link = document.createElement('a');
+                link.download = `Cierre_Turno_${fechaStr}_${horaStr}.jpg`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }, 'image/jpeg', 0.7);
             
             limpiarPlanilla();
             location.reload();
