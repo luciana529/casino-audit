@@ -426,7 +426,6 @@
         for(let i = 0; i < 15; i++) {
             agregarFilaHTML();
         }
-        actualizarHoraCierre();
         if (window.PLANILLA_READONLY) {
             limpiarPlanilla();
         } else {
@@ -568,7 +567,6 @@
     }
 
     async function guardarYGenerarImagen() {
-        actualizarHoraCierre();
         if (!validarHoras()) return;
         const captura = await capturarImagenPlanilla();
         if (!captura) return;
@@ -594,7 +592,6 @@
 
     async function guardarYGenerarPDF() {
         const element = document.getElementById('planillaToPrint');
-        actualizarHoraCierre();
         if (!validarHoras()) return;
         const captura = await capturarImagenPlanilla();
         if (!captura) return;

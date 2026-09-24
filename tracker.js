@@ -1,12 +1,6 @@
 function extraerYEnviarDatos(imagenPlanilla = null) {
     const operador = document.getElementById('nombre')?.value || "Sin Nombre";
-    const momentoGuardado = new Date();
-    const fecha = [
-        momentoGuardado.getFullYear(),
-        String(momentoGuardado.getMonth() + 1).padStart(2, '0'),
-        String(momentoGuardado.getDate()).padStart(2, '0')
-    ].join('-');
-    const horaControl = `${String(momentoGuardado.getHours()).padStart(2, '0')}:${String(momentoGuardado.getMinutes()).padStart(2, '0')}`;
+    const fecha = document.getElementById('fecha')?.value || '';
     const horaInicio = document.getElementById('horaInicio')?.value || '';
     const horaCierre = document.getElementById('horaCierre')?.value || '';
 
@@ -63,7 +57,7 @@ function extraerYEnviarDatos(imagenPlanilla = null) {
         usuario_id: window.CASINO_USER_ID ?? null,
         operador: operador,
         fecha: fecha,
-        hora: horaControl,
+        hora: horaCierre,
         hora_inicio: horaInicio,
         hora_cierre: horaCierre,
         saldos_inicio: saldosInicio,
