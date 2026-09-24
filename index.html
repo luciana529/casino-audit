@@ -177,6 +177,34 @@
             font-size: 11px;
         }
 
+        /* En pantallas grandes y pequeñas, las tablas de detalle quedan debajo de ingresos. */
+        .sheet-container > .row {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sheet-container > .row > .col-lg-8,
+        .sheet-container > .row > .col-lg-4 {
+            width: 100%;
+            max-width: 100%;
+            flex: 0 0 100%;
+        }
+
+        .sheet-container .bloque-derecha {
+            overflow-x: visible;
+        }
+
+        .sheet-container .bloque-derecha .tabla-derecha {
+            width: 100%;
+            max-width: 100%;
+            table-layout: fixed;
+        }
+
+        .sheet-container .bloque-derecha .tabla-derecha input {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
         @media (max-width: 576px) {
             .tabla-inicio input[type="date"].fecha-campo {
                 min-width: 126px;
