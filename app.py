@@ -342,7 +342,6 @@ elif user["rol"] == "admin":
 
     menu = st.session_state.admin_section
     presencia_admin(user)
-    mostrar_usuarios_conectados()
     
     # 1. MONITOREO EN TIEMPO REAL POR EMPLEADO
     if menu == "live":
@@ -374,6 +373,7 @@ elif user["rol"] == "admin":
 
     # 2. MÉTRICAS CONSOLIDADAS
     elif menu == "dashboard":
+        mostrar_usuarios_conectados()
         mostrar_dashboard()
 
     # 3. CONTROL Y CONSULTA DE CIERRES
