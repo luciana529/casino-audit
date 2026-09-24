@@ -556,32 +556,48 @@
 
     async function capturarImagenPlanilla() {
         const element = document.getElementById('planillaToPrint');
+        const contenedores = [
+            element,
+            ...element.querySelectorAll('.table-responsive, .bloque-derecha, .tabla-inicio-scroll')
+        ];
+        const tablas = [...element.querySelectorAll('table')];
+        const estilosContenedores = contenedores.map(item => item.getAttribute('style'));
+        const estilosTablas = tablas.map(item => item.getAttribute('style'));
         try {
+            element.style.width = 'max-content';
+            element.style.maxWidth = 'none';
+            contenedores.slice(1).forEach(contenedor => {
+                contenedor.style.width = 'max-content';
+                contenedor.style.maxWidth = 'none';
+                contenedor.style.overflow = 'visible';
+            });
+            tablas.forEach(tabla => {
+                tabla.style.width = 'max-content';
+                tabla.style.maxWidth = 'none';
+            });
+            const anchoCompleto = Math.max(element.scrollWidth, element.offsetWidth);
+            const altoCompleto = Math.max(element.scrollHeight, element.offsetHeight);
             const canvas = await html2canvas(element, {
                 scale: 1,
-                width: Math.max(element.scrollWidth, element.offsetWidth),
-                height: element.scrollHeight,
-                windowWidth: Math.max(window.innerWidth, element.scrollWidth),
-                windowHeight: Math.max(window.innerHeight, element.scrollHeight),
-                onclone: documento => {
-                    const planilla = documento.getElementById('planillaToPrint');
-                    if (!planilla) return;
-                    planilla.style.width = `${Math.max(planilla.scrollWidth, planilla.offsetWidth)}px`;
-                    planilla.style.maxWidth = 'none';
-                    planilla.querySelectorAll('.table-responsive, .bloque-derecha, .tabla-inicio-scroll').forEach(contenedor => {
-                        contenedor.style.overflow = 'visible';
-                        contenedor.style.maxWidth = 'none';
-                    });
-                    planilla.querySelectorAll('table').forEach(tabla => {
-                        tabla.style.maxWidth = 'none';
-                    });
-                }
+                width: anchoCompleto,
+                height: altoCompleto,
+                windowWidth: Math.max(window.innerWidth, anchoCompleto),
+                windowHeight: Math.max(window.innerHeight, altoCompleto)
             });
             return { canvas, imgData: canvas.toDataURL('image/jpeg', 0.55) };
         } catch (error) {
             console.error('No se pudo capturar la planilla:', error);
             alert('No se pudo capturar la imagen de la planilla. El cierre no se guardó.');
             return null;
+        } finally {
+            contenedores.forEach((item, index) => {
+                if (estilosContenedores[index] === null) item.removeAttribute('style');
+                else item.setAttribute('style', estilosContenedores[index]);
+            });
+            tablas.forEach((item, index) => {
+                if (estilosTablas[index] === null) item.removeAttribute('style');
+                else item.setAttribute('style', estilosTablas[index]);
+            });
         }
     }
 
