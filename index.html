@@ -442,21 +442,24 @@
     }
 
     function guardarTemporal() {
+        asegurarIdsCampos();
         const inputs = document.querySelectorAll('.editable, .editable-texto-largo, .editable-der, .editable-der-ancho');
-        let valores = [];
+        const estado = {
+            __filas: document.querySelectorAll('#filasPrincipales tr').length,
+            campos: {}
+        };
         inputs.forEach(input => {
-            valores.push(input.value);
+            if (input.id) estado.campos[input.id] = input.value;
         });
-        localStorage.setItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`, JSON.stringify(valores));
+        localStorage.setItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`, JSON.stringify(estado));
     }
 
     function cargarTemporal() {
         let guardados = localStorage.getItem(`planilla_valores_${window.CASINO_USER_ID ?? 'anonimo'}`);
         if (guardados) {
-            let valores = JSON.parse(guardados);
-            let inputsFijos = 30; 
-            let totalInputsTabla = valores.length - inputsFijos;
-            let totalFilasGuardadas = Math.floor(totalInputsTabla / 9);
+            let guardado = JSON.parse(guardados);
+            let campos = Array.isArray(guardado) ? {} : (guardado.campos || {});
+            let totalFilasGuardadas = Number(guardado.__filas) || 15;
 
             if (totalFilasGuardadas > 15) {
                 let filasExtra = totalFilasGuardadas - 15;
@@ -466,10 +469,16 @@
             }
 
             const inputs = document.querySelectorAll('.editable, .editable-texto-largo, .editable-der, .editable-der-ancho');
-            inputs.forEach((input, index) => {
-                if (valores[index] !== undefined) {
-                    input.value = valores[index];
-                    if (valores[index].trim() !== "" && valores[index] !== "0") {
+            asegurarIdsCampos();
+            if (Array.isArray(guardado)) {
+                inputs.forEach((input, index) => {
+                    if (guardado[index] !== undefined) campos[input.id] = guardado[index];
+                });
+            }
+            inputs.forEach(input => {
+                if (input.id && campos[input.id] !== undefined) {
+                    input.value = campos[input.id];
+                    if (String(campos[input.id]).trim() !== "" && campos[input.id] !== "0") {
                         input.setAttribute('readonly', 'true');
                     }
                 }
