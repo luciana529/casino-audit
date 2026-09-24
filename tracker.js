@@ -106,7 +106,7 @@ function extraerYEnviarDatos(imagenPlanilla = null) {
     })
     .catch(err => {
         console.error("Error enviando auditoría:", err);
-        alert("No se pudo enviar el cierre. Verifica tu sesión y la conexión con la API.");
+        alert(`No se pudo enviar el cierre. ${err.message || 'Verifica tu sesión y la conexión con la API.'}`);
         return null;
     })
     .finally(() => {
@@ -145,7 +145,7 @@ function bloquearPlanilla() {
 
 function obtenerEstadoPlanilla() {
     asegurarIdsCampos();
-    const state = { __filas: document.querySelectorAll('#filasPrincipales tr').length };
+    const state = { __filas: String(document.querySelectorAll('#filasPrincipales tr').length) };
     document.querySelectorAll('input, select, textarea').forEach(element => {
         if (element.id) state[element.id] = element.value;
     });
