@@ -36,6 +36,18 @@
             table-layout: fixed;
             overflow: hidden;
         }
+
+        .tabla-inicio.fila-expandible {
+            table-layout: auto;
+            min-width: max-content !important;
+        }
+
+        .tabla-inicio .nombre-campo {
+            min-width: 140px;
+            width: 140px;
+            max-width: none;
+            white-space: nowrap;
+        }
         .tabla-inicio td,
         .tabla-inicio th {
             min-width: 0 !important;
@@ -230,9 +242,9 @@
         <div class="col-lg-4 ps-lg-1 bloque-derecha">
             
             <!-- 1. Cabecera Fecha, Nombre, Horarios -->
-            <table class="mb-2 tabla-derecha tabla-inicio">
+            <table class="mb-2 tabla-derecha tabla-inicio fila-expandible">
                 <tr><td class="excel-blue" style="width: 30%;">FECHA</td><td colspan="3"><input type="date" id="fecha" class="editable-der fecha-campo" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
-                <tr><td class="excel-blue">NOMBRE</td><td colspan="4"><input type="text" id="nombre" class="editable-der" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="guardarTemporal()"></td></tr>
+                <tr><td class="excel-blue">NOMBRE</td><td colspan="3"><input type="text" id="nombre" class="editable-der nombre-campo" placeholder="nombre" onblur="bloquearCasilla(this)" oninput="ajustarAnchoCampo(this); guardarTemporal()"></td></tr>
                 <tr>
                     <td class="excel-blue" style="width: 20%;">INICIO</td>
                     <td style="width: 30%;"><input type="text" id="horaInicio" class="editable-der hora-campo" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="formatearHora(this); guardarTemporal()" onblur="bloquearCasilla(this)"></td>

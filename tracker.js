@@ -295,8 +295,11 @@ function ajustarAnchoCampo(elemento) {
     const context = canvas.getContext('2d');
     context.font = getComputedStyle(elemento).font;
     const ancho = Math.ceil(context.measureText(contenido).width) + 18;
-    const minimo = elemento.classList.contains('editable-texto-largo') ? 120 : 48;
-    elemento.style.width = `${Math.min(320, Math.max(minimo, ancho))}px`;
+    const minimo = elemento.classList.contains('nombre-campo')
+        ? 140
+        : (elemento.classList.contains('editable-texto-largo') ? 120 : 48);
+    const maximo = elemento.classList.contains('nombre-campo') ? 560 : 320;
+    elemento.style.width = `${Math.min(maximo, Math.max(minimo, ancho))}px`;
     elemento.title = elemento.value;
 }
 
