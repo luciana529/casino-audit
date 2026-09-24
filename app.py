@@ -199,6 +199,23 @@ if "api_token" not in st.session_state:
 def api_headers():
     return {"Authorization": f"Bearer {st.session_state.api_token}"} if st.session_state.api_token else {}
 
+@st.dialog("Confirmar eliminación")
+def confirmar_eliminacion_empleado(user_id, nombre):
+    st.warning(f"¿Estás seguro de eliminar al empleado **{nombre}**?")
+    st.caption("Sus cierres históricos se conservarán, pero la cuenta dejará de estar disponible.")
+    confirmar, cancelar = st.columns(2)
+    with confirmar:
+        if st.button("Sí, eliminar", type="primary", use_container_width=True):
+            res = requests.delete(f"{API_URL}/usuarios/{user_id}", headers=api_headers())
+            if res.status_code == 200:
+                st.session_state.crud_message = f"✅ Empleado **{nombre}** eliminado correctamente. Sus cierres históricos fueron conservados."
+                st.rerun()
+            else:
+                st.error(res.json().get("detail", "No se pudo eliminar el usuario."))
+    with cancelar:
+        if st.button("Cancelar", use_container_width=True):
+            st.rerun()
+
 def login(username, password):
     try:
         res = requests.post(f"{API_URL}/login", json={"username": username, "password": password})
@@ -421,11 +438,6 @@ elif user["rol"] == "admin":
                 usuarios_eliminables = [u for u in lista_u if u["rol"] == "empleado"]
                 u_del = st.selectbox("Seleccionar usuario para eliminar:", [u["id"] for u in usuarios_eliminables], format_func=lambda user_id: next(u["nombre"] for u in usuarios_eliminables if u["id"] == user_id), key="del_sel") if usuarios_eliminables else None
                 if u_del:
-                    if st.button("🔴 Confirmar Eliminar", type="primary"):
-                        res = requests.delete(f"{API_URL}/usuarios/{u_del}", headers=api_headers())
-                        if res.status_code == 200:
-                            nombre_eliminado = next((u["nombre"] for u in usuarios_eliminables if u["id"] == u_del), "Empleado")
-                            st.session_state.crud_message = f"✅ Empleado **{nombre_eliminado}** eliminado correctamente. Sus cierres históricos fueron conservados."
-                            st.rerun()
-                        else:
-                            st.error(res.json().get("detail", "No se pudo eliminar el usuario."))
+                    nombre_eliminado = next((u["nombre"] for u in usuarios_eliminables if u["id"] == u_del), "Empleado")
+                    if st.button("🔴 Eliminar empleado", type="primary"):
+                        confirmar_eliminacion_empleado(u_del, nombre_eliminado)
