@@ -557,7 +557,26 @@
     async function capturarImagenPlanilla() {
         const element = document.getElementById('planillaToPrint');
         try {
-            const canvas = await html2canvas(element, { scale: 1, windowWidth: 1400 });
+            const canvas = await html2canvas(element, {
+                scale: 1,
+                width: Math.max(element.scrollWidth, element.offsetWidth),
+                height: element.scrollHeight,
+                windowWidth: Math.max(window.innerWidth, element.scrollWidth),
+                windowHeight: Math.max(window.innerHeight, element.scrollHeight),
+                onclone: documento => {
+                    const planilla = documento.getElementById('planillaToPrint');
+                    if (!planilla) return;
+                    planilla.style.width = `${Math.max(planilla.scrollWidth, planilla.offsetWidth)}px`;
+                    planilla.style.maxWidth = 'none';
+                    planilla.querySelectorAll('.table-responsive, .bloque-derecha, .tabla-inicio-scroll').forEach(contenedor => {
+                        contenedor.style.overflow = 'visible';
+                        contenedor.style.maxWidth = 'none';
+                    });
+                    planilla.querySelectorAll('table').forEach(tabla => {
+                        tabla.style.maxWidth = 'none';
+                    });
+                }
+            });
             return { canvas, imgData: canvas.toDataURL('image/jpeg', 0.55) };
         } catch (error) {
             console.error('No se pudo capturar la planilla:', error);
