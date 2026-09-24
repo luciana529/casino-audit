@@ -116,7 +116,7 @@ def mostrar_dashboard():
                 st.markdown("---")
                 st.subheader(f"Cierres registrados hoy ({fecha_hoy})")
                 st.dataframe(
-                    df_dia[["id", "nombre_usuario", "operador", "fecha", "hora", "total_caja"]],
+                    df_dia[["nombre_usuario", "operador", "fecha", "hora", "total_caja"]],
                     use_container_width=True
                 )
             else:
