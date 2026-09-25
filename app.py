@@ -282,6 +282,42 @@ if st.sidebar.button("🚪 Cerrar Sesión"):
     logout()
 st.sidebar.markdown("---")
 
+if user["rol"] == "admin" and not st.session_state.get("admin_password_changed"):
+    if st.sidebar.button("🔑 Cambiar contraseña", use_container_width=True, key="admin_change_password_button"):
+        st.session_state.admin_password_change_open = not st.session_state.get("admin_password_change_open", False)
+        st.rerun()
+    if st.session_state.get("admin_password_change_open"):
+        with st.sidebar.form("admin_password_form"):
+            nueva_password_admin = st.text_input("Nueva contraseña", type="password")
+            confirmar_password_admin = st.text_input("Confirmar contraseña", type="password")
+            guardar_password_admin = st.form_submit_button("Guardar contraseña", use_container_width=True)
+            if guardar_password_admin:
+                if not nueva_password_admin:
+                    st.error("La contraseña no puede estar vacía.")
+                elif nueva_password_admin != confirmar_password_admin:
+                    st.error("Las contraseñas no coinciden.")
+                else:
+                    res_password = requests.post(
+                        f"{API_URL}/cambiar-credenciales",
+                        headers=api_headers(),
+                        json={
+                            "user_id": user["id"],
+                            "nuevo_username": user["username"],
+                            "nueva_password": nueva_password_admin
+                        },
+                        timeout=10
+                    )
+                    if res_password.status_code == 200:
+                        respuesta_password = res_password.json()
+                        st.session_state.user = respuesta_password["user"]
+                        st.session_state.api_token = respuesta_password["token"]
+                        st.session_state.admin_password_change_open = False
+                        st.session_state.admin_password_changed = True
+                        st.success("Contraseña actualizada correctamente.")
+                        st.rerun()
+                    else:
+                        st.error(res_password.json().get("detail", "No se pudo cambiar la contraseña."))
+
 # --- VISTA EMPLEADO ---
 if user["rol"] == "empleado":
     encabezado, accion = st.columns([5, 1])
