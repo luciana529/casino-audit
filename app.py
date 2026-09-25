@@ -59,9 +59,25 @@ def presencia_admin(user):
     api = urlparse(API_URL)
     ws_scheme = "wss" if api.scheme == "https" else "ws"
     ws_url = f"{ws_scheme}://{api.netloc}/ws/live"
+    logout_url = f"{API_URL}/logout"
+    api_token = st.session_state.get('api_token', '')
     presence_script = f"""
     <script>
-    const ws = new WebSocket({json.dumps(ws_url + '?token=' + st.session_state.get('api_token', ''))});
+    const token = {json.dumps(api_token)};
+    const logoutUrl = {json.dumps(logout_url)};
+    let logoutSent = false;
+    const cerrarSesionAdminAlSalir = () => {{
+        if (logoutSent || !token) return;
+        logoutSent = true;
+        fetch(logoutUrl, {{
+            method: 'POST',
+            headers: {{ Authorization: `Bearer ${{token}}` }},
+            keepalive: true
+        }}).catch(() => {{}});
+    }};
+    window.addEventListener('pagehide', cerrarSesionAdminAlSalir);
+    window.addEventListener('beforeunload', cerrarSesionAdminAlSalir);
+    const ws = new WebSocket({json.dumps(ws_url + '?token=' + api_token)});
     ws.onopen = () => ws.send(JSON.stringify({{
         type: 'presence', usuario_id: {json.dumps(user['id'])},
         nombre: {json.dumps(user['nombre'])}, rol: 'admin'
