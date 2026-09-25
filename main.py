@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import time
+import secrets
 from typing import List, Dict, Any, Optional
 
 app = FastAPI(title="Casino Audit API")
@@ -39,6 +40,29 @@ ESTADOS_PLANILLA = {}
 
 def token_id(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+PASSWORD_ITERATIONS = 310000
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PASSWORD_ITERATIONS)
+    return "pbkdf2_sha256${}${}${}".format(
+        PASSWORD_ITERATIONS,
+        base64.urlsafe_b64encode(salt).decode().rstrip("="),
+        base64.urlsafe_b64encode(digest).decode().rstrip("=")
+    )
+
+def verificar_password(password: str, almacenada: str) -> bool:
+    if not almacenada.startswith("pbkdf2_sha256$"):
+        return hmac.compare_digest(password, almacenada)
+    try:
+        _, iteraciones, sal, digest_esperado = almacenada.split("$", 3)
+        salt = base64.urlsafe_b64decode(sal + "=" * (-len(sal) % 4))
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, int(iteraciones))
+        digest_actual = base64.urlsafe_b64encode(digest).decode().rstrip("=")
+        return hmac.compare_digest(digest_actual, digest_esperado)
+    except (ValueError, TypeError, base64.binascii.Error):
+        return False
 
 def limpiar_sesiones_expiradas() -> None:
     ahora = time.time()
@@ -113,7 +137,7 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id SERIAL PRIMARY KEY,
                     username VARCHAR(50) UNIQUE NOT NULL,
-                    password VARCHAR(100) NOT NULL,
+                    password VARCHAR(255) NOT NULL,
                     nombre VARCHAR(100) NOT NULL,
                     rol VARCHAR(20) NOT NULL DEFAULT 'empleado',
                     requiere_cambio_pass BOOLEAN DEFAULT TRUE
@@ -137,6 +161,7 @@ def init_db():
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_token_hash VARCHAR(64);")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_ultimo_contacto TIMESTAMP;")
             cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sesion_activa BOOLEAN NOT NULL DEFAULT FALSE;")
+            cursor.execute("ALTER TABLE usuarios ALTER COLUMN password TYPE VARCHAR(255);")
             if not BLOQUEAR_SESIONES:
                 cursor.execute("""
                     UPDATE usuarios
@@ -153,10 +178,11 @@ def init_db():
             if cantidad_usuarios == 0:
                 cursor.execute("""
                     INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass)
-                    VALUES
-                        ('admin', 'admin123', 'Administrador General', 'admin', FALSE),
-                        ('empleado1', '1234', 'Empleado 1', 'empleado', TRUE);
-                """)
+                    VALUES (%s, %s, %s, %s, %s), (%s, %s, %s, %s, %s);
+                """, (
+                    "admin", hash_password("admin123"), "Administrador General", "admin", False,
+                    "empleado1", hash_password("1234"), "Empleado 1", "empleado", True
+                ))
 
             conn.commit()
             cursor.close()
@@ -340,7 +366,9 @@ def login(data: LoginRequest):
 
     if not DATABASE_URL:
         for u in USUARIOS_LOCALES:
-            if u["username"] == user_clean and u["password"] == pass_clean:
+            if u["username"] == user_clean and verificar_password(pass_clean, u["password"]):
+                if not u["password"].startswith("pbkdf2_sha256$"):
+                    u["password"] = hash_password(pass_clean)
                 user_data = u.copy()
                 del user_data["password"]
                 token = create_token(user_data)
@@ -352,16 +380,20 @@ def login(data: LoginRequest):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cursor.execute("""
-            SELECT id, username, nombre, rol, requiere_cambio_pass
+            SELECT id, username, password, nombre, rol, requiere_cambio_pass
             FROM usuarios
-            WHERE TRIM(username) = %s AND TRIM(password) = %s
+            WHERE TRIM(username) = %s
             FOR UPDATE;
-        """, (user_clean, pass_clean))
+        """, (user_clean,))
         user = cursor.fetchone()
-        if not user:
+        if not user or not verificar_password(pass_clean, user["password"]):
             raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
         user_data = dict(user)
+        if not user_data["password"].startswith("pbkdf2_sha256$"):
+            user_data["password"] = hash_password(pass_clean)
+            cursor.execute("UPDATE usuarios SET password = %s WHERE id = %s;", (user_data["password"], user_data["id"]))
+        user_data.pop("password", None)
         token = create_token(user_data)
         if BLOQUEAR_SESIONES:
             reservar_sesion_db(cursor, user_data["id"], token)
@@ -400,7 +432,7 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
         for u in USUARIOS_LOCALES:
             if u["id"] == data.user_id:
                 u["username"] = data.nuevo_username.strip()
-                u["password"] = data.nueva_password.strip()
+                u["password"] = hash_password(data.nueva_password.strip())
                 u["requiere_cambio_pass"] = False
                 user_data = u.copy()
                 del user_data["password"]
@@ -412,7 +444,7 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
     try:
         cursor.execute(
             "UPDATE usuarios SET username = %s, password = %s, requiere_cambio_pass = FALSE WHERE id = %s RETURNING id, username, nombre, rol, requiere_cambio_pass;",
-            (data.nuevo_username.strip(), data.nueva_password.strip(), data.user_id)
+            (data.nuevo_username.strip(), hash_password(data.nueva_password.strip()), data.user_id)
         )
         updated_user = cursor.fetchone()
         conn.commit()
@@ -448,7 +480,7 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
         if empleados_actuales >= MAX_EMPLEADOS:
             raise HTTPException(status_code=400, detail="Se alcanzó el límite de 23 empleados. Para agregar más personas, consulta al desarrollador.")
         nuevo_id = len(USUARIOS_LOCALES) + 1
-        nuevo_u = {"id": nuevo_id, "username": data.username.strip(), "password": data.password.strip(), "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
+        nuevo_u = {"id": nuevo_id, "username": data.username.strip(), "password": hash_password(data.password.strip()), "nombre": data.nombre, "rol": data.rol, "requiere_cambio_pass": True}
         USUARIOS_LOCALES.append(nuevo_u)
         return {"status": "ok", "mensaje": "Usuario creado"}
 
@@ -461,7 +493,7 @@ def crear_usuario(data: UserCreate, _: Dict[str, Any] = Depends(admin_user)):
             raise HTTPException(status_code=400, detail="Se alcanzó el límite de 23 empleados. Para agregar más personas, consulta al desarrollador.")
         cursor.execute(
             "INSERT INTO usuarios (username, password, nombre, rol, requiere_cambio_pass) VALUES (%s, %s, %s, %s, TRUE);",
-            (data.username.strip(), data.password.strip(), data.nombre, data.rol)
+            (data.username.strip(), hash_password(data.password.strip()), data.nombre, data.rol)
         )
         conn.commit()
     except psycopg2.IntegrityError:
@@ -485,7 +517,7 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
                 u["nombre"] = data.nombre
                 u["rol"] = data.rol
                 if data.password:
-                    u["password"] = data.password.strip()
+                    u["password"] = hash_password(data.password.strip())
                 return {"status": "ok", "mensaje": "Usuario modificado"}
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -499,7 +531,7 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
         if target[0] != "empleado":
             raise HTTPException(status_code=403, detail="Los administradores son fijos")
         if data.password:
-            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, data.password.strip(), user_id))
+            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, hash_password(data.password.strip()), user_id))
         else:
             cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, user_id))
         conn.commit()
