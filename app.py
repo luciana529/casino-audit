@@ -441,10 +441,7 @@ elif user["rol"] == "admin":
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
             if user.get("username") == "programador_admin":
-                empleados = [
-                    u for u in res_u.json()
-                    if u.get("rol") == "empleado" and u.get("username") == "programador_empleado"
-                ]
+                empleados = [u for u in res_u.json() if u.get("rol") == "empleado"]
             else:
                 empleados = [u for u in res_u.json() if u["rol"] == "empleado" and usuario_visible(u)]
             if empleados:
