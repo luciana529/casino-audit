@@ -279,7 +279,21 @@ function conectarTiempoReal(wsUrl) {
     }
 }
 
+let cierreSesionEnviado = false;
+
+function cerrarSesionAlSalir() {
+    if (cierreSesionEnviado || window.PLANILLA_READONLY || !window.API_TOKEN) return;
+    cierreSesionEnviado = true;
+    fetch(`${window.API_BASE_URL}/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${window.API_TOKEN}` },
+        keepalive: true
+    }).catch(() => {});
+}
+
+window.addEventListener('pagehide', cerrarSesionAlSalir);
 window.addEventListener('beforeunload', () => {
+    cerrarSesionAlSalir();
     clearInterval(window.presenciaInterval);
     clearInterval(window.sincronizacionForzada);
     if (window.wsTiempoReal?.readyState === WebSocket.OPEN) {
