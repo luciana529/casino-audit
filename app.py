@@ -30,6 +30,17 @@ st.markdown("""
 DEFAULT_API_URL = "https://casino-audit-production.up.railway.app/api/v1"
 API_URL = os.getenv("API_URL", DEFAULT_API_URL).rstrip("/")
 BASE_DIR = Path(__file__).resolve().parent
+USUARIOS_OCULTOS = {"programador_empleado", "programador_admin"}
+
+def usuario_visible(usuario):
+    return usuario.get("username") not in USUARIOS_OCULTOS and usuario.get("nombre") not in USUARIOS_OCULTOS
+
+def cierre_visible(cierre):
+    return (
+        cierre.get("username") not in USUARIOS_OCULTOS
+        and cierre.get("nombre_usuario") not in USUARIOS_OCULTOS
+        and cierre.get("operador") not in USUARIOS_OCULTOS
+    )
 
 def cargar_planilla(usuario_id=None, usuario_nombre="Usuario", usuario_rol="empleado", solo_lectura=False, watch_user_id=None):
     index_path = BASE_DIR / "index.html"
@@ -98,6 +109,7 @@ def mostrar_usuarios_conectados():
         respuesta = requests.get(f"{API_URL}/presencia", headers=api_headers(), timeout=5)
         if respuesta.status_code == 200:
             conectados = respuesta.json()
+            conectados = [usuario for usuario in conectados if usuario_visible(usuario)]
             st.caption(f"🟢 Usuarios conectados ahora: {len(conectados)}")
             if conectados:
                 st.dataframe(
@@ -119,6 +131,7 @@ def mostrar_dashboard():
         res = requests.get(f"{API_URL}/registros", headers=api_headers(), timeout=10)
         if res.status_code == 200:
             registros = res.json()
+            registros = [registro for registro in registros if cierre_visible(registro)]
             df = pd.DataFrame(registros)
             df_dia = df[df["fecha"].astype(str) == fecha_hoy] if not df.empty and "fecha" in df.columns else pd.DataFrame()
             total_cierres = len(df_dia)
@@ -150,6 +163,7 @@ def mostrar_control_cierres():
         return
 
     cierres = res.json()
+    cierres = [cierre for cierre in cierres if cierre_visible(cierre)]
     if not cierres:
         st.info("No hay cierres registrados todavía.")
         return
@@ -426,7 +440,7 @@ elif user["rol"] == "admin":
         st.subheader("Supervisión en Vivo de Planilla")
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
-            empleados = [u for u in res_u.json() if u["rol"] == "empleado"]
+            empleados = [u for u in res_u.json() if u["rol"] == "empleado" and usuario_visible(u)]
             if empleados:
                 col_lista, col_visor = st.columns([1, 3])
                 with col_lista:
@@ -486,7 +500,7 @@ elif user["rol"] == "admin":
 
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
-            lista_u = res_u.json()
+            lista_u = [usuario for usuario in res_u.json() if usuario_visible(usuario)]
             st.dataframe(pd.DataFrame(lista_u)[["username", "nombre", "rol", "requiere_cambio_pass"]], use_container_width=True)
             
             st.markdown("---")
