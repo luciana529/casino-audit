@@ -28,7 +28,7 @@ TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
 BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "true").strip().lower() == "true"
-SESION_INACTIVA_SEGUNDOS = 120
+SESION_INACTIVA_SEGUNDOS = 30 * 60
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -88,7 +88,7 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
                         WHERE id = %s
                             AND sesion_activa = TRUE
                             AND sesion_token_hash = %s
-                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
             FOR UPDATE;
         """, (user["id"], token_id(token)))
         if not cursor.fetchone():
@@ -109,7 +109,7 @@ def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
                     AND (
                             sesion_activa = FALSE
                             OR sesion_ultimo_contacto IS NULL
-                            OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                            OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '30 minutes'
                     );
     """, (token_id(token), user_id))
     if cursor.rowcount != 1:
@@ -666,7 +666,7 @@ def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
             SELECT id AS usuario_id, nombre, username, rol
             FROM usuarios
                         WHERE sesion_activa = TRUE
-                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
             ORDER BY nombre;
         """)
         sesiones = [dict(fila) for fila in cursor.fetchall()]
