@@ -26,7 +26,7 @@ AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-r
 TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
-BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "false").strip().lower() == "true"
+BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "true").strip().lower() == "true"
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
