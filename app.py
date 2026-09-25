@@ -275,6 +275,26 @@ user = st.session_state.user
 # --- PRIMER INGRESO ---
 if user.get("requiere_cambio_pass"):
     st.warning("⚠️ Primer Ingreso Detectado: Debes cambiar tu usuario y clave.")
+    components.html(f"""
+        <script>
+        (() => {{
+            const token = {json.dumps(st.session_state.api_token or '')};
+            const logoutUrl = {json.dumps(f"{API_URL}/logout")};
+            let enviado = false;
+            const liberarSesion = () => {{
+                if (enviado || !token) return;
+                enviado = true;
+                fetch(logoutUrl, {{
+                    method: 'POST',
+                    headers: {{ Authorization: `Bearer ${{token}}` }},
+                    keepalive: true
+                }}).catch(() => {{}});
+            }};
+            window.addEventListener('pagehide', liberarSesion);
+            window.addEventListener('beforeunload', liberarSesion);
+        }})();
+        </script>
+    """, height=1)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.form("form_cambio_pass"):
