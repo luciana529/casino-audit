@@ -9,9 +9,32 @@ from datetime import datetime
 BASE_URL = os.getenv("BOT_API_URL", "https://casino-audit-production.up.railway.app").rstrip("/")
 WS_URL = os.getenv("BOT_WS_URL", "wss://casino-audit-production.up.railway.app/ws/live")
 BOT_PASSWORD = os.getenv("BOT_PASSWORD", "12345")
-BOT_COUNT = int(os.getenv("BOT_COUNT", "21"))
+BOT_USERS = [
+    "bianca",
+    "yuliana",
+    "yesica",
+    "sheila",
+    "camila",
+    "milena",
+    "sol",
+    "natasha",
+    "caty",
+    "diana",
+    "julia",
+    "brenda",
+    "tatiana",
+    "briana",
+    "belen",
+    "josefina",
+    "yoselin",
+    "caro",
+    "eliza",
+    "estefi",
+    "la colo",
+]
+BOT_COUNT = min(int(os.getenv("BOT_COUNT", str(len(BOT_USERS)))), len(BOT_USERS))
 PAUSA_ENTRE_CELDAS = float(os.getenv("BOT_PAUSA_ENTRE_CELDAS", "0.2"))
-PAUSA_ENTRE_CIERRES = float(os.getenv("BOT_PAUSA_ENTRE_CIERRES", "60"))
+PAUSA_ENTRE_CIERRES = float(os.getenv("BOT_PAUSA_ENTRE_CIERRES", "10"))
 
 
 def datos_primera_fila(user_id):
@@ -84,8 +107,8 @@ async def guardar_cierre(client, token, user_id, valores):
     response.raise_for_status()
     print(f"[Bot empleado{user_id}] Guardó el cierre de la primera fila.")
 
-async def ejecutar_bot(user_id):
-    username = f"empleado{user_id}"
+async def ejecutar_bot(user_index):
+    username = BOT_USERS[user_index]
     password = BOT_PASSWORD
     
     async with httpx.AsyncClient() as client:
@@ -102,9 +125,19 @@ async def ejecutar_bot(user_id):
                     await asyncio.sleep(10)
                     continue
                 
-                token = login_res.json().get("token")
+                login_data = login_res.json()
+                token = login_data.get("token")
                 if not token:
                     print(f"[Bot {username}] La API no devolvió token. Reintentando en 10s...")
+                    await asyncio.sleep(10)
+                    continue
+
+                user = login_data.get("user") or {}
+                user_id = user.get("id")
+                username = user.get("username", username)
+                nombre = user.get("nombre", username)
+                if not user_id:
+                    print(f"[Bot {username}] La API no devolvió el ID del usuario. Reintentando en 10s...")
                     await asyncio.sleep(10)
                     continue
 
@@ -116,7 +149,7 @@ async def ejecutar_bot(user_id):
                     await websocket.send(json.dumps({
                         "type": "presence",
                         "usuario_id": user_id,
-                        "nombre": username,
+                        "nombre": nombre,
                         "rol": "empleado"
                     }))
                     
@@ -126,7 +159,7 @@ async def ejecutar_bot(user_id):
                     await guardar_cierre(client, token, user_id, valores)
                     return
 
-            except (httpx.RequestError, websockets.exceptions.WebSocketException) as e:
+            except (httpx.RequestError, websockets.exceptions.WebSocketException):
                 print(f"[Bot {username}] Desconectado. Reconectando en 5s...")
                 await asyncio.sleep(5)
             except Exception as e:
@@ -139,9 +172,9 @@ async def main():
     print("=" * 50)
     
     while True:
-        for user_id in range(1, BOT_COUNT + 1):
-            await ejecutar_bot(user_id)
-            print(f"[Simulador] Empleado{user_id} terminó. Próximo empleado en {PAUSA_ENTRE_CIERRES:g}s.")
+        for user_index in range(BOT_COUNT):
+            await ejecutar_bot(user_index)
+            print(f"[Simulador] {BOT_USERS[user_index]} terminó. Próximo empleado en {PAUSA_ENTRE_CIERRES:g}s.")
             await asyncio.sleep(PAUSA_ENTRE_CIERRES)
 
 if __name__ == "__main__":
