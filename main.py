@@ -27,6 +27,7 @@ TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
 BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "true").strip().lower() == "true"
+SESION_INACTIVA_SEGUNDOS = 120
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -40,11 +41,15 @@ def token_id(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 def limpiar_sesiones_expiradas() -> None:
-    return None
+    ahora = time.time()
+    for usuario_id, sesion in list(SESIONES_ACTIVAS.items()):
+        if ahora - sesion["ultimo_contacto"] > SESION_INACTIVA_SEGUNDOS:
+            SESIONES_ACTIVAS.pop(usuario_id, None)
 
 def abrir_sesion(user: Dict[str, Any], token: str) -> None:
     if not BLOQUEAR_SESIONES:
         return
+    limpiar_sesiones_expiradas()
     if user["id"] in SESIONES_ACTIVAS:
         raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
     SESIONES_ACTIVAS[user["id"]] = {"token": token_id(token), "ultimo_contacto": time.time()}
@@ -56,7 +61,10 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
         cursor.execute("""
             SELECT sesion_activa
             FROM usuarios
-            WHERE id = %s AND sesion_activa = TRUE AND sesion_token_hash = %s
+                        WHERE id = %s
+                            AND sesion_activa = TRUE
+                            AND sesion_token_hash = %s
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '2 minutes'
             FOR UPDATE;
         """, (user["id"], token_id(token)))
         if not cursor.fetchone():
@@ -73,7 +81,12 @@ def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
         SET sesion_activa = TRUE,
             sesion_token_hash = %s,
             sesion_ultimo_contacto = CURRENT_TIMESTAMP
-        WHERE id = %s AND sesion_activa = FALSE;
+                WHERE id = %s
+                    AND (
+                            sesion_activa = FALSE
+                            OR sesion_ultimo_contacto IS NULL
+                            OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                    );
     """, (token_id(token), user_id))
     if cursor.rowcount != 1:
         raise HTTPException(status_code=409, detail="Este usuario ya tiene una sesión abierta en otro dispositivo.")
@@ -620,7 +633,8 @@ def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
         cursor.execute("""
             SELECT id AS usuario_id, nombre, username, rol
             FROM usuarios
-            WHERE sesion_activa = TRUE
+                        WHERE sesion_activa = TRUE
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '2 minutes'
             ORDER BY nombre;
         """)
         sesiones = [dict(fila) for fila in cursor.fetchall()]
