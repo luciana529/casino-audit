@@ -28,7 +28,7 @@ TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
 BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "true").strip().lower() == "true"
-SESION_INACTIVA_SEGUNDOS = 30 * 60
+SESION_INACTIVA_SEGUNDOS = 5 * 60
 
 USUARIOS_LOCALES = [
     {"id": 1, "username": "admin", "password": "admin123", "nombre": "Administrador General", "rol": "admin", "requiere_cambio_pass": False},
@@ -436,17 +436,28 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
                 u["requiere_cambio_pass"] = False
                 user_data = u.copy()
                 del user_data["password"]
-                return {"status": "ok", "mensaje": "Credenciales actualizadas", "user": user_data, "token": create_token(user_data)}
+                nuevo_token = create_token(user_data)
+                if BLOQUEAR_SESIONES:
+                    abrir_sesion(user_data, nuevo_token)
+                return {"status": "ok", "mensaje": "Credenciales actualizadas", "user": user_data, "token": nuevo_token}
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
+        password_hash = hash_password(data.nueva_password.strip())
         cursor.execute(
             "UPDATE usuarios SET username = %s, password = %s, requiere_cambio_pass = FALSE WHERE id = %s RETURNING id, username, nombre, rol, requiere_cambio_pass;",
-            (data.nuevo_username.strip(), hash_password(data.nueva_password.strip()), data.user_id)
+            (data.nuevo_username.strip(), password_hash, data.user_id)
         )
         updated_user = cursor.fetchone()
+        user_data = dict(updated_user)
+        nuevo_token = create_token(user_data)
+        if BLOQUEAR_SESIONES:
+            cursor.execute(
+                "UPDATE usuarios SET sesion_token_hash = %s, sesion_ultimo_contacto = CURRENT_TIMESTAMP, sesion_activa = TRUE WHERE id = %s;",
+                (token_id(nuevo_token), data.user_id)
+            )
         conn.commit()
     except psycopg2.IntegrityError:
         conn.rollback()
@@ -455,8 +466,7 @@ def cambiar_credenciales(data: CambiarCredencialesRequest, user: Dict[str, Any] 
         cursor.close()
         conn.close()
         
-    user_data = dict(updated_user)
-    return {"status": "ok", "user": user_data, "token": create_token(user_data)}
+    return {"status": "ok", "user": user_data, "token": nuevo_token}
 
 @app.get("/api/v1/usuarios")
 def obtener_usuarios(_: Dict[str, Any] = Depends(admin_user)):
