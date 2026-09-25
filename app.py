@@ -440,7 +440,13 @@ elif user["rol"] == "admin":
         st.subheader("Supervisión en Vivo de Planilla")
         res_u = requests.get(f"{API_URL}/usuarios", headers=api_headers())
         if res_u.status_code == 200:
-            empleados = [u for u in res_u.json() if u["rol"] == "empleado" and usuario_visible(u)]
+            if user.get("username") == "programador_admin":
+                empleados = [
+                    u for u in res_u.json()
+                    if u.get("rol") == "empleado" and u.get("username") == "programador_empleado"
+                ]
+            else:
+                empleados = [u for u in res_u.json() if u["rol"] == "empleado" and usuario_visible(u)]
             if empleados:
                 col_lista, col_visor = st.columns([1, 3])
                 with col_lista:
