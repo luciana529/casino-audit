@@ -289,6 +289,12 @@ if user.get("requiere_cambio_pass"):
                         st.session_state.user = response["user"]
                         st.session_state.api_token = response["token"]
                         st.rerun()
+                    else:
+                        st.error(res.json().get("detail", "No se pudieron actualizar las credenciales."))
+                elif not nueva_pass:
+                    st.error("La contraseña no puede estar vacía.")
+                else:
+                    st.error("Las contraseñas no coinciden.")
     st.stop()
 
 # --- SIDEBAR GLOBAL ---

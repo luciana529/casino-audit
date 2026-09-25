@@ -528,6 +528,7 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
                 u["rol"] = data.rol
                 if data.password:
                     u["password"] = hash_password(data.password.strip())
+                    u["requiere_cambio_pass"] = True
                 return {"status": "ok", "mensaje": "Usuario modificado"}
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -541,7 +542,7 @@ def actualizar_usuario(user_id: int, data: UserUpdate, _: Dict[str, Any] = Depen
         if target[0] != "empleado":
             raise HTTPException(status_code=403, detail="Los administradores son fijos")
         if data.password:
-            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, hash_password(data.password.strip()), user_id))
+            cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s, password = %s, requiere_cambio_pass = TRUE WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, hash_password(data.password.strip()), user_id))
         else:
             cursor.execute("UPDATE usuarios SET username = %s, nombre = %s, rol = %s WHERE id = %s;", (data.username.strip(), data.nombre, data.rol, user_id))
         conn.commit()
