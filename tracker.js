@@ -292,9 +292,6 @@ function cerrarSesionAlSalir() {
 }
 
 window.addEventListener('pagehide', cerrarSesionAlSalir);
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') cerrarSesionAlSalir();
-});
 window.addEventListener('beforeunload', () => {
     cerrarSesionAlSalir();
     clearInterval(window.presenciaInterval);
