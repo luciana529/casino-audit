@@ -87,6 +87,9 @@ def presencia_admin(user):
         }}).catch(() => {{}});
     }};
     window.addEventListener('pagehide', cerrarSesionAdminAlSalir);
+    document.addEventListener('visibilitychange', () => {{
+        if (document.visibilityState === 'hidden') cerrarSesionAdminAlSalir();
+    }});
     window.addEventListener('beforeunload', cerrarSesionAdminAlSalir);
     const ws = new WebSocket({json.dumps(ws_url + '?token=' + api_token)});
     ws.onopen = () => ws.send(JSON.stringify({{
@@ -305,6 +308,9 @@ if user.get("requiere_cambio_pass"):
                 }}).catch(() => {{}});
             }};
             window.addEventListener('pagehide', liberarSesion);
+            document.addEventListener('visibilitychange', () => {{
+                if (document.visibilityState === 'hidden') liberarSesion();
+            }});
             window.addEventListener('beforeunload', liberarSesion);
         }})();
         </script>
