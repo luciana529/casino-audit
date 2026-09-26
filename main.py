@@ -28,7 +28,7 @@ AUTH_SECRET = os.getenv("AUTH_SECRET", "local-development-secret-change-before-r
 TOKEN_TTL_SECONDS = 8 * 60 * 60
 MAX_EMPLEADOS = 23
 SESIONES_ACTIVAS: Dict[int, Dict[str, Any]] = {}
-BLOQUEAR_SESIONES = os.getenv("BLOQUEAR_SESIONES", "true").strip().lower() == "true"
+BLOQUEAR_SESIONES = True
 SESION_INACTIVA_SEGUNDOS = 5 * 60
 
 USUARIOS_LOCALES = [
@@ -89,7 +89,7 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
                         WHERE id = %s
                             AND sesion_activa = TRUE
                             AND sesion_token_hash = %s
-                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
             FOR UPDATE;
         """, (user["id"], token_id(token)))
         if not cursor.fetchone():
@@ -110,7 +110,7 @@ def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
                     AND (
                             sesion_activa = FALSE
                             OR sesion_ultimo_contacto IS NULL
-                            OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                            OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
                     );
     """, (token_id(token), user_id))
     if cursor.rowcount != 1:
@@ -269,31 +269,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-async def liberar_sesion_si_desconectado(usuario_id: int, token: str) -> None:
-    await asyncio.sleep(3)
-    if any(
-        datos.get("usuario_id") == usuario_id
-        for datos in manager.connection_users.values()
-    ):
-        return
-    if DATABASE_URL and BLOQUEAR_SESIONES:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE usuarios
-            SET sesion_activa = FALSE,
-                sesion_token_hash = NULL,
-                sesion_ultimo_contacto = NULL
-            WHERE id = %s AND sesion_token_hash = %s;
-        """, (usuario_id, token_id(token)))
-        conn.commit()
-        cursor.close()
-        conn.close()
-    elif BLOQUEAR_SESIONES:
-        sesion = SESIONES_ACTIVAS.get(usuario_id)
-        if sesion and sesion["token"] == token_id(token):
-            SESIONES_ACTIVAS.pop(usuario_id, None)
-
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
@@ -336,8 +311,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
         manager.disconnect(websocket)
-        if BLOQUEAR_SESIONES:
-            asyncio.create_task(liberar_sesion_si_desconectado(authenticated_user["id"], token))
 
 # Models
 class LoginRequest(BaseModel):
@@ -705,7 +678,7 @@ def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
             SELECT id AS usuario_id, nombre, username, rol
             FROM usuarios
                         WHERE sesion_activa = TRUE
-                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                            AND sesion_ultimo_contacto > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
             ORDER BY nombre;
         """)
         sesiones = [dict(fila) for fila in cursor.fetchall()]
