@@ -289,6 +289,28 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+async def liberar_sesion_si_no_reconecta(usuario_id: int, token: str) -> None:
+    await asyncio.sleep(5)
+    if any(datos.get("usuario_id") == usuario_id for datos in manager.connection_users.values()):
+        return
+    if DATABASE_URL:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE usuarios
+            SET sesion_activa = FALSE,
+                sesion_token_hash = NULL,
+                sesion_ultimo_contacto = NULL
+            WHERE id = %s AND sesion_token_hash = %s;
+        """, (usuario_id, token_id(token)))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    else:
+        sesion = SESIONES_ACTIVAS.get(usuario_id)
+        if sesion and sesion["token"] == token_id(token):
+            SESIONES_ACTIVAS.pop(usuario_id, None)
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
@@ -331,6 +353,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.broadcast(json.dumps(payload))
     except (WebSocketDisconnect, json.JSONDecodeError):
         manager.disconnect(websocket)
+        if BLOQUEAR_SESIONES:
+            asyncio.create_task(liberar_sesion_si_no_reconecta(authenticated_user["id"], token))
 
 # Models
 class LoginRequest(BaseModel):
