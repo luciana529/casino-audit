@@ -534,7 +534,12 @@
         transmitirCantidadFilas();
     }
 
+    function esCampoExentoDeBloqueo(inputId) {
+        return ['fecha', 'horaInicio', 'horaCierre'].includes(inputId);
+    }
+
     function bloquearCasilla(input) {
+        if (!input || !input.id || esCampoExentoDeBloqueo(input.id)) return;
         if (input.value.trim() !== "" && input.value !== "0") {
             input.setAttribute('readonly', 'true');
         }
@@ -588,8 +593,12 @@
             inputs.forEach(input => {
                 if (input.id && campos[input.id] !== undefined) {
                     input.value = campos[input.id];
-                    if (String(campos[input.id]).trim() !== "" && campos[input.id] !== "0") {
-                        input.setAttribute('readonly', 'true');
+                    if (!esCampoExentoDeBloqueo(input.id)) {
+                        if (String(campos[input.id]).trim() !== "" && campos[input.id] !== "0") {
+                            input.setAttribute('readonly', 'true');
+                        }
+                    } else {
+                        input.removeAttribute('readonly');
                     }
                 }
             });
