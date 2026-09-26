@@ -100,6 +100,26 @@ def validar_sesion_db(user: Dict[str, Any], token: str) -> None:
         cursor.close()
         conn.close()
 
+def limpiar_sesiones_db() -> None:
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE usuarios
+            SET sesion_activa = FALSE,
+                sesion_token_hash = NULL,
+                sesion_ultimo_contacto = NULL
+            WHERE sesion_activa = TRUE
+              AND (
+                  sesion_ultimo_contacto IS NULL
+                  OR sesion_ultimo_contacto <= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+              );
+        """)
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
 def reservar_sesion_db(cursor, user_id: int, token: str) -> None:
     cursor.execute("""
         UPDATE usuarios
@@ -377,6 +397,7 @@ def login(data: LoginRequest):
                 return {"status": "ok", "user": user_data, "token": token}
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
+    limpiar_sesiones_db()
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
@@ -672,6 +693,7 @@ def obtener_registros(user: Dict[str, Any] = Depends(current_user)):
 @app.get("/api/v1/presencia")
 def obtener_presencia(_: Dict[str, Any] = Depends(admin_user)):
     if DATABASE_URL:
+        limpiar_sesiones_db()
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("""
